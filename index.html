@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nákup s rozumem</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#16202F">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nákup">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,600..900&family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: letákový jazyk (žlutá cenovka, červená cena) na klidném papíru; jedna sloupec na telefonu, vstupy + plán vedle sebe na širokém displeji. */
+:root{
+  --paper:#F3F5F8; --card:#FFFFFF; --ink:#16202F; --muted:#4A5568; --line:#D3DAE4;
+  --promo:#B3001B; --burst:#FFD21F; --burst-ink:#16202F; --burst-red:#B00020;
+  --go:#0F7B45; --on-go:#FFFFFF;
+  --route:#1B5FC1; --route-bg:#E5EEFB; --on-route:#FFFFFF;
+  --display:"Archivo","Arial Narrow",Arial,sans-serif;
+  --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1521; --card:#172131; --ink:#EDF1F7; --muted:#A8B3C5; --line:#2C394E;
+    --promo:#FF8E9B; --go:#4CC38A; --on-go:#08210F;
+    --route:#6BA3F5; --route-bg:#162844; --on-route:#0B1B33;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1521; --card:#172131; --ink:#EDF1F7; --muted:#A8B3C5; --line:#2C394E;
+  --promo:#FF8E9B; --go:#4CC38A; --on-go:#08210F;
+  --route:#6BA3F5; --route-bg:#162844; --on-route:#0B1B33;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{font-size:18px;-webkit-text-size-adjust:100%}
+html[data-size="l"]{font-size:21px}
+html[data-size="xl"]{font-size:24px}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);line-height:1.4}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--route);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding:16px}
+
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.brand{display:flex;gap:12px;align-items:center}
+.brand svg{width:48px;height:48px;flex:none}
+h1{font-family:var(--display);font-stretch:75%;font-weight:900;font-size:1.9rem;line-height:1;margin:0;text-transform:uppercase;letter-spacing:.01em}
+.tagline{margin:.25rem 0 0;color:var(--muted);font-size:.95rem}
+.sizes{display:flex;gap:6px}
+.sizes button{min-width:48px;height:48px;border:2px solid var(--ink);background:var(--card);border-radius:12px;font-weight:800;padding:0}
+.sizes button[aria-pressed="true"]{background:var(--ink);color:var(--card)}
+.demo{background:var(--burst);color:var(--burst-ink);padding:.7rem 1rem;border-radius:12px;margin:0 0 16px;font-size:.95rem}
+
+.layout{display:grid;gap:16px}
+@media (min-width:920px){
+  .layout{grid-template-columns:minmax(340px,400px) 1fr;align-items:start}
+  .inputs{position:sticky;top:16px}
+}
+.inputs,.out,.out2{display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1rem 1.1rem}
+h2{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:1.25rem;margin:0 0 .8rem;display:flex;gap:.6rem;align-items:center;line-height:1.15}
+.out>h2{margin:0}
+.n{display:inline-grid;place-items:center;flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--ink);color:var(--card);font-size:1rem}
+
+.add{display:flex;gap:8px}
+.add input{flex:1;min-width:0;height:3.2rem;border:2px solid var(--ink);border-radius:12px;padding:0 .8rem;font:inherit;background:var(--card);color:var(--ink)}
+.add button{height:3.2rem;padding:0 1rem;border:0;border-radius:12px;background:var(--ink);color:var(--card);font-weight:800}
+.sug{display:flex;flex-wrap:wrap;gap:8px;margin:.7rem 0 0}
+.chip{min-height:2.6rem;padding:.25rem .9rem;border:2px solid var(--line);border-radius:999px;background:var(--card);font-weight:600}
+.chip:hover{border-color:var(--ink)}
+.sugnote{color:var(--muted);margin:.7rem 0 0;font-size:.95rem}
+ul.basket{list-style:none;margin:1rem 0 0;padding:0}
+.bi{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:.6rem 0;border-top:1px solid var(--line)}
+.bi .nm{font-weight:700}
+.bi .cat{display:block;color:var(--muted);font-size:.85rem;font-weight:400}
+.step{display:flex;align-items:center;gap:4px}
+.step button{width:2.6rem;height:2.6rem;border-radius:10px;border:2px solid var(--line);background:var(--card);font-size:1.2rem;font-weight:800;padding:0}
+.step output{min-width:1.8rem;text-align:center;font-weight:800;font-variant-numeric:tabular-nums}
+.rm{grid-column:1/-1;justify-self:start;background:none;border:0;color:var(--muted);text-decoration:underline;padding:.1rem 0;font-size:.9rem}
+.empty{color:var(--muted);margin:1rem 0 0}
+
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mode{border:2px solid var(--line);background:var(--card);border-radius:14px;padding:.7rem .3rem;display:grid;gap:.15rem;justify-items:center;text-align:center}
+.mode b{font-size:1.05rem}
+.mode small{color:var(--muted);font-size:.8rem;line-height:1.2}
+.mode svg{width:2rem;height:2rem}
+.mode[aria-pressed="true"]{border-color:var(--route);background:var(--route-bg)}
+.field{margin-top:1.1rem}
+.flabel{display:block;font-weight:700;margin-bottom:.4rem}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;min-height:3rem;border:2px solid var(--line);border-radius:12px;background:var(--card);font-weight:800;font-size:1.1rem}
+.seg button[aria-pressed="true"]{border-color:var(--route);background:var(--route-bg)}
+.help{color:var(--muted);font-size:.9rem;margin:.45rem 0 0}
+.sw{display:flex;gap:.8rem;align-items:center;width:100%;text-align:left;border:2px solid var(--line);border-radius:12px;background:var(--card);padding:.6rem .8rem;min-height:3.2rem}
+.sw .track{flex:none;width:3.2rem;height:1.9rem;border-radius:999px;background:var(--muted);position:relative;transition:background .15s}
+.sw .track::after{content:"";position:absolute;top:.2rem;left:.2rem;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--card);transition:transform .15s}
+.sw[aria-checked="true"] .track{background:var(--go)}
+.sw[aria-checked="true"] .track::after{transform:translateX(1.3rem)}
+
+.verdict{display:grid;gap:1rem;grid-template-columns:auto 1fr;align-items:center}
+@media (max-width:520px){.verdict{grid-template-columns:1fr}}
+.tag{background:var(--burst);color:var(--burst-ink);border-radius:14px;padding:.6rem 1rem .7rem;transform:rotate(-2deg);box-shadow:0 3px 0 var(--burst-red);text-align:center;min-width:9rem;justify-self:start}
+.tag .t1{display:block;font-weight:800;text-transform:uppercase;font-size:.8rem;letter-spacing:.08em}
+.tag .num{display:block;font-family:var(--display);font-stretch:70%;font-weight:900;font-size:3.1rem;line-height:1.05;color:var(--burst-red);font-variant-numeric:tabular-nums}
+.tag .num small{font-size:1.5rem;font-weight:800}
+.verdict h3{margin:0 0 .25rem;font-family:var(--display);font-stretch:85%;font-weight:800;font-size:1.3rem;line-height:1.15}
+.verdict p{margin:.2rem 0;color:var(--muted)}
+.verdict p.main{color:var(--ink)}
+.linkbtn{background:none;border:0;padding:0;color:var(--route);text-decoration:underline;font-weight:700}
+
+.opts{display:grid;gap:8px}
+.opt{display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;border:2px solid var(--line);border-radius:14px;background:var(--card);padding:.7rem .9rem;width:100%}
+.opt[aria-pressed="true"]{border-color:var(--route);background:var(--route-bg)}
+.opt .st{font-weight:800}
+.opt .pr{font-family:var(--display);font-stretch:80%;font-weight:800;font-size:1.3rem;text-align:right;font-variant-numeric:tabular-nums}
+.opt .mt{color:var(--muted);font-size:.9rem;grid-column:1/-1}
+.badge{display:inline-block;background:var(--go);color:var(--on-go);border-radius:6px;font-size:.7rem;font-weight:800;padding:.05rem .4rem;margin-left:.4rem;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
+
+.hint{border-left:6px solid var(--burst);display:flex;gap:.8rem;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.hint p{margin:0}
+.btn{min-height:3rem;padding:0 1.1rem;border-radius:12px;border:2px solid var(--ink);background:var(--card);font-weight:800}
+.btn.pri{background:var(--ink);color:var(--card)}
+
+.map svg{width:100%;height:auto;display:block}
+.map .lbl{font:700 12.5px var(--body);fill:var(--ink);paint-order:stroke;stroke:var(--card);stroke-width:3.5px;stroke-linejoin:round}
+.map .lbl.dim{font-weight:600;fill:var(--muted)}
+.map .sm{font:600 11px var(--body);fill:var(--muted)}
+.map .cap{color:var(--muted);font-size:.85rem;margin:.4rem 0 0}
+
+ol.stops{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.stop{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.sh{display:flex;gap:.7rem;align-items:center;padding:.7rem .9rem;background:var(--route-bg)}
+.sh .no{flex:none;width:2.2rem;height:2.2rem;border-radius:50%;background:var(--route);color:var(--on-route);font-weight:800;display:grid;place-items:center}
+.sh h3{margin:0;font-family:var(--display);font-stretch:85%;font-weight:800;font-size:1.15rem;line-height:1.15}
+.kind{display:inline-block;margin-left:.5rem;padding:.05rem .45rem;border:1.5px solid var(--route);border-radius:6px;font-family:var(--body);font-stretch:100%;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--route);vertical-align:middle}
+.sh p{margin:.1rem 0 0;color:var(--muted);font-size:.9rem}
+ul.items{list-style:none;margin:0;padding:0}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:.7rem .9rem;border-top:1px solid var(--line)}
+.item label{display:flex;gap:.7rem;align-items:flex-start;font-weight:600;cursor:pointer}
+.item input{width:1.6rem;height:1.6rem;flex:none;margin:.1rem 0 0;accent-color:var(--go)}
+.item .pp{text-align:right}
+.now{font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
+.was{color:var(--muted);text-decoration:line-through;font-size:.85rem;margin-left:.4rem;white-space:nowrap}
+.deal{display:inline-block;background:var(--burst);color:var(--burst-ink);font-weight:800;font-size:.72rem;border-radius:6px;padding:.05rem .4rem;margin-right:.4rem;transform:rotate(-1.5deg);text-transform:uppercase;letter-spacing:.03em}
+.note{grid-column:1/-1;color:var(--muted);font-size:.85rem;margin-left:2.3rem}
+.unit{display:block;color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
+@media (max-width:520px){
+  .item{grid-template-columns:1fr}
+  .item .pp{text-align:left;margin-left:2.3rem}
+  .note{margin-left:2.3rem}
+}
+.item.done .nm,.item.done .pp{opacity:.45}
+.item.done .nm{text-decoration:line-through}
+.sub{display:flex;justify-content:space-between;padding:.6rem .9rem;border-top:1px solid var(--line);font-weight:700;font-variant-numeric:tabular-nums}
+.homeleg{border:2px dashed var(--line);border-radius:14px;padding:.7rem .9rem;color:var(--muted);display:flex;gap:.6rem;align-items:center}
+
+.tot{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap}
+.tot .big{font-family:var(--display);font-stretch:75%;font-weight:900;font-size:2.4rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.tot .lab{font-weight:700}
+.tot-note{color:var(--muted);margin:.3rem 0 .9rem;font-size:.95rem}
+.copybox{width:100%;min-height:9rem;margin-top:.8rem;font:inherit;font-size:.9rem;background:var(--paper);color:var(--ink);border:2px solid var(--line);border-radius:10px;padding:.6rem}
+footer{margin:20px 0 8px;color:var(--muted);font-size:.9rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* --- v2 doplňky --- */
+.locrow{display:flex;gap:8px;margin-top:.6rem}
+.locrow input{flex:1;min-width:0;height:3.2rem;border:2px solid var(--ink);border-radius:12px;padding:0 .8rem;font:inherit;background:var(--card);color:var(--ink)}
+.locrow button,.btn2{min-height:3.2rem;padding:0 1rem;border:2px solid var(--ink);border-radius:12px;background:var(--card);font-weight:800}
+.btn2.full{width:100%;margin-top:.6rem}
+.homeok{margin:.6rem 0 0;padding:.6rem .8rem;border-radius:12px;background:var(--route-bg);font-weight:600}
+.matches{list-style:none;margin:.7rem 0 0;padding:0;display:grid;gap:6px}
+.matches li{display:flex;justify-content:space-between;gap:.6rem;border:1px solid var(--line);border-radius:10px;padding:.45rem .7rem;font-size:.95rem}
+.matches .ch{font-weight:800;margin-right:.4rem}
+.matches .pr{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.addbig{width:100%;min-height:3.2rem;margin-top:.7rem;border:0;border-radius:12px;background:var(--ink);color:var(--card);font-weight:800}
+.bi .what{display:block;color:var(--muted);font-size:.85rem;font-weight:400;margin-top:.15rem}
+details.more{margin-top:1.1rem;border:2px solid var(--line);border-radius:12px;padding:.2rem .8rem .8rem}
+details.more summary{cursor:pointer;font-weight:800;min-height:3rem;display:flex;align-items:center}
+.noaction{border-left:6px solid var(--burst-red)}
+.noaction ul{margin:.4rem 0 0 1.1rem;padding:0}
+.printonly{display:none}
+@media print{
+  .inputs,.sizes,.demo,.hint,.opts,.btn,.homeleg+*,footer,.linkbtn,#datanote{display:none!important}
+  .layout{display:block}
+  body{background:#fff;color:#000}
+  .card{border:1px solid #888;break-inside:avoid}
+  .printonly{display:block}
+  .stop{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-basket" viewBox="0 0 120 100">
+ <path d="M30 40 L18 8" stroke="#3E9B52" stroke-width="5" stroke-linecap="round"/><path d="M36 42 L28 12" stroke="#3E9B52" stroke-width="5" stroke-linecap="round"/>
+ <path d="M26 44 Q34 14 44 44 Z" fill="#F08A24"/>
+ <ellipse cx="64" cy="36" rx="22" ry="12" fill="#E2A857"/><path d="M52 31 q4 -3 8 0 M64 28 q4 -3 8 0 M70 36 q4 -3 8 0" stroke="#C9893A" stroke-width="2" fill="none" stroke-linecap="round"/>
+ <rect x="84" y="14" width="18" height="32" rx="2" fill="#F4F7FB" stroke="#9FB3CC" stroke-width="2"/><path d="M84 14 l9 -8 l9 8 z" fill="#8FB4E3"/><rect x="88" y="24" width="10" height="9" rx="2" fill="#8FB4E3"/>
+ <circle cx="50" cy="30" r="12" fill="#D8412F"/><path d="M50 18 q2 -7 8 -8" stroke="#5B8C3A" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="47" cy="26" rx="3" ry="4.5" fill="#fff" opacity=".35"/>
+ <circle cx="76" cy="40" r="11" fill="#7DBB4C"/><path d="M69 38 q7 -8 14 0 M70 44 q6 -6 12 0" stroke="#5E9B36" stroke-width="2" fill="none" stroke-linecap="round"/>
+ <path d="M12 52 H108 L98 94 Q97 98 92 98 H28 Q23 98 22 94 Z" fill="#C98F4B"/>
+ <path d="M16 64 H104 M19 76 H101 M22 88 H98" stroke="#A8702F" stroke-width="3" stroke-linecap="round"/><path d="M36 52 L32 98 M60 52 V98 M84 52 L88 98" stroke="#A8702F" stroke-width="3"/>
+ <rect x="6" y="46" width="108" height="11" rx="5.5" fill="#B27A38"/>
+</symbol></defs></svg>
+<div id="landing" class="landing" hidden>
+  <div class="lwrap">
+    <header class="lhead">
+      <svg id="burst2" viewBox="0 0 48 48" aria-hidden="true"></svg>
+      <span class="lname">Nákup s rozumem</span>
+    </header>
+    <section class="hero">
+      <svg class="scene" viewBox="0 0 520 250" role="img" aria-label="Nákupní košík s potravinami a trasa mezi obchody">
+  <circle cx="440" cy="52" r="26" fill="#FFC93C"/><circle cx="440" cy="52" r="34" fill="#FFC93C" opacity=".25"/>
+  <path d="M0 190 Q90 140 190 178 T380 170 T520 160 V250 H0 Z" fill="#B9DDB1"/><path d="M0 215 Q120 175 260 205 T520 195 V250 H0 Z" fill="#8CC58A"/>
+  <path d="M60 232 C 130 190, 170 215, 250 200 S 400 170, 468 196" stroke="#fff" stroke-width="5" stroke-dasharray="2 11" stroke-linecap="round" fill="none"/>
+  <g transform="translate(40 120)"><rect x="0" y="22" width="76" height="52" rx="6" fill="#F6E3B8"/><path d="M-6 26 L38 0 L82 26 Z" fill="#E0663A"/><rect x="28" y="42" width="20" height="32" rx="3" fill="#8A5A2B"/><circle cx="62" cy="40" r="9" fill="#FFC93C"/><text x="62" y="45" text-anchor="middle" font-family="Arial" font-weight="800" font-size="13" fill="#B5361B">%</text></g>
+  <g transform="translate(395 128)"><rect x="0" y="20" width="84" height="54" rx="6" fill="#DCEBF5"/><rect x="-4" y="12" width="92" height="14" rx="4" fill="#2F7FA0"/><rect x="30" y="42" width="24" height="32" rx="3" fill="#6B7C8C"/><circle cx="14" cy="44" r="9" fill="#FFC93C"/><text x="14" y="49" text-anchor="middle" font-family="Arial" font-weight="800" font-size="13" fill="#B5361B">%</text></g>
+  <g transform="translate(262 16)"><path d="M18 0 C4 0 -4 10 -4 21 C-4 36 18 54 18 54 S40 36 40 21 C40 10 32 0 18 0 Z" fill="#D8412F"/><circle cx="18" cy="21" r="8" fill="#fff"/></g>
+  <use href="#i-basket" x="150" y="90" width="210" height="175"/>
+</svg>
+      <h1>Nakupujte výhodně a bez zbytečného obíhání obchodů.</h1>
+      <p class="lead">Napíšete, co potřebujete koupit. My najdeme akční ceny v obchodech ve vašem okolí a poradíme, kam jít a co kde koupit.</p>
+      <ul class="points">
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12.5V4h8.5L21 13.5 13.5 21z" fill="#FFC93C" stroke="#B5761B" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.7" fill="#fff"/></svg></span><span><b>Aktuální akce.</b> Každý den z letáků Kauflandu, Penny, Lidlu, Billy a Globusu.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.4 2 6 4.6 6 7.8 6 12 12 19 12 19s6-7 6-11.2C18 4.6 15.6 2 12 2z" fill="#D8412F"/><circle cx="12" cy="7.800" r="2.300" fill="#fff"/><path d="M4 22q4-2 8-1t8 1" stroke="#247085" stroke-width="1.800" stroke-dasharray="1 3.500" stroke-linecap="round" fill="none"/></svg></span><span><b>Jasná trasa.</b> Řekneme vám i to, jestli se další zastávka vůbec vyplatí.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3.500" fill="#3E9B52"/><circle cx="16.500" cy="9" r="3" fill="#F08A24"/><path d="M1.500 20c.5-4 3-6 6.500-6s6 2 6.500 6z" fill="#3E9B52"/><path d="M14 20c.4-3 2-5 4.500-5s3.800 1.700 4 5z" fill="#F08A24"/></svg></span><span><b>Společný seznam.</b> Jeden z vás vybere zboží, druhý jede nakoupit a vidí, co a kde.</span></li>
+      </ul>
+    </section>
+    <section class="card authcard" aria-labelledby="h-auth">
+      <h2 id="h-auth">Vstup do aplikace</h2>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-act="tab" data-v="login" aria-selected="true">Přihlásit se</button>
+        <button type="button" role="tab" data-act="tab" data-v="register" aria-selected="false">Vytvořit účet</button>
+      </div>
+      <form id="authform" novalidate>
+        <label for="a-email">E-mail</label>
+        <input id="a-email" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        <label for="a-pass">Heslo <span class="hint" id="a-hint"></span></label>
+        <input id="a-pass" name="password" type="password" autocomplete="current-password" required>
+        <label class="showpw"><input type="checkbox" id="a-show"> Zobrazit heslo</label>
+        <p class="err" id="a-err" role="alert"></p>
+        <button type="submit" class="go" id="a-go">Přihlásit se</button>
+        <p class="fine" id="a-fine"></p>
+      </form>
+    </section>
+    <p class="lfoot">Ukládáme jen váš e-mail, zašifrované heslo, nákupní seznam a adresu domova, kterou zadáte kvůli výběru obchodů. Účet můžete kdykoli smazat. Akce pocházejí z veřejných letáků řetězců, ceny vždy ověřte v obchodě. <button type="button" class="linkbtn" data-act="contact">Napište nám</button></p>
+  </div>
+</div>
+
+<body>
+<div class="wrap" id="appwrap" hidden>
+  <header class="top">
+    <div class="brand">
+      <svg id="burst" viewBox="0 0 48 48" aria-hidden="true"></svg>
+      <div>
+        <h1>Nákup s rozumem</h1>
+        <p class="tagline">Najdeme akční ceny a naplánujeme, kam jít.</p>
+      </div>
+    </div>
+    <svg class="brandpic" viewBox="0 0 120 100" aria-hidden="true"><use href="#i-basket"/></svg>
+    <div class="sizes" role="group" aria-label="Velikost písma">
+      <button type="button" data-act="size" data-v="m" aria-label="Běžné písmo" style="font-size:14px">A</button>
+      <button type="button" data-act="size" data-v="l" aria-label="Větší písmo" style="font-size:19px">A</button>
+      <button type="button" data-act="size" data-v="xl" aria-label="Největší písmo" style="font-size:25px">A</button>
+    </div>
+  </header>
+
+  <div class="acct" id="acct"></div>
+  <details class="appshare">
+    <summary id="h-appshare">Doporučte aplikaci známým</summary>
+    <p class="help" style="margin:.5rem 0 .6rem">Pošlete odkaz na aplikaci rodině a přátelům.</p>
+    <div class="row">
+      <button type="button" class="btn wa" data-act="appshare" data-v="wa">WhatsApp</button>
+      <button type="button" class="btn" data-act="appshare" data-v="sms">SMS</button>
+      <button type="button" class="btn" data-act="appshare" data-v="mail">E-mail</button>
+      <button type="button" class="btn" data-act="appshare" data-v="native" id="appshare-native" hidden>Jinak…</button>
+    </div>
+  </details>
+
+  <section class="card" aria-labelledby="h-way">
+    <h2 id="h-way">Jak se dopravíte?</h2>
+    <div class="modes" role="group" aria-label="Doprava">
+      <button type="button" class="mode" data-act="mode" data-v="foot" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4.5" r="1.8"/><path d="M12 8l-2.5 4 3 2.5L12 21M12 8l3 2.5 3 .5M9.5 12l-3 1"/></svg>
+        <b>Pěšky</b><small data-radlab="foot">obchody do 3 km</small>
+      </button>
+      <button type="button" class="mode" data-act="mode" data-v="bus" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="13" rx="2"/><path d="M4 11h16M7 20v-3.5M17 20v-3.5"/><circle cx="8" cy="13.8" r=".7"/><circle cx="16" cy="13.8" r=".7"/></svg>
+        <b>MHD</b><small data-radlab="bus">obchody do 6 km</small>
+      </button>
+      <button type="button" class="mode" data-act="mode" data-v="car" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16v-4l2-5h12l2 5v4zM4 16v2.5M20 16v2.5"/><circle cx="8" cy="13.5" r="1"/><circle cx="16" cy="13.5" r="1"/></svg>
+        <b>Autem</b><small data-radlab="car">obchody do 30 km</small>
+      </button>
+    </div>
+    <div class="radii" role="group" aria-label="Jak daleko chcete jet">
+      <p class="help" style="margin:.6rem 0 .3rem">Jak daleko jste ochotni jít nebo jet:</p>
+      <label>Pěšky <select data-rad="foot" aria-label="Dosah pěšky"></select></label>
+      <label>MHD <select data-rad="bus" aria-label="Dosah MHD"></select></label>
+      <label>Autem <select data-rad="car" aria-label="Dosah autem"></select></label>
+    </div>
+    <details class="more">
+      <summary>Další možnosti</summary>
+      <p class="help" id="ratehelp"></p>
+      <div class="field">
+        <span class="flabel" id="l-max">Nejvíc obchodů</span>
+        <div class="seg" role="group" aria-labelledby="l-max">
+          <button type="button" data-act="max" data-v="1" aria-pressed="false">1</button>
+          <button type="button" data-act="max" data-v="2" aria-pressed="true">2</button>
+          <button type="button" data-act="max" data-v="3" aria-pressed="false">3</button>
+        </div>
+      </div>
+      <div class="field" data-fmtrow>
+        <span class="flabel" id="l-fmt">Typ obchodů</span>
+        <div class="seg" role="group" aria-labelledby="l-fmt">
+          <button type="button" data-act="fmt" data-v="all" aria-pressed="true">Vše</button>
+          <button type="button" data-act="fmt" data-v="super" aria-pressed="false">Super</button>
+          <button type="button" data-act="fmt" data-v="hyper" aria-pressed="false">Hyper</button>
+        </div>
+        <p class="help">Penny a Lidl jsou supermarkety, Kaufland hypermarket. Mívají různé akce, proto je počítáme zvlášť.</p>
+      </div>
+      <div class="field">
+        <button type="button" class="sw" data-act="cards" role="switch" aria-checked="false">
+          <span class="track" aria-hidden="true"></span>
+          <span><b>Mám věrnostní karty</b><br><span class="help" style="margin:0">Zatím umíme ceny s kartou Penny a Lidl Plus. Ceny s Kaufland Card doplníme.</span></span>
+        </button>
+      </div>
+    </details>
+  </section>
+
+  <div class="cattabs" role="tablist" aria-label="Druh obchodů">
+    <button type="button" role="tab" data-act="cat" data-v="food" aria-selected="true" aria-pressed="true">Řetězce potraviny</button>
+    <button type="button" role="tab" data-act="cat" data-v="drug" aria-selected="false" aria-pressed="false">Řetězce drogerie</button>
+  </div>
+
+  <p class="demo" id="datanote" role="status">Načítám aktuální akce…</p>
+
+  <div class="layout">
+    <div class="inputs">
+      <section class="card" aria-labelledby="h-list">
+        <h2 id="h-list"><span class="n">1</span>Co potřebujete koupit?</h2>
+        <form class="add" id="addform" autocomplete="off">
+          <input id="q" type="text" inputmode="search" enterkeyhint="search" placeholder="Např. mléko, jogurt, prací gel…" aria-label="Název zboží">
+          <button type="submit">Hledat</button>
+        </form>
+        <div id="chainfilter" class="chainfilter"></div>
+        <div id="suggest"></div>
+        <div id="lastbox"></div>
+        <ul class="basket" id="basket"></ul>
+        <div class="sharebox" id="sharebox"></div>
+      </section>
+
+      <section class="card" aria-labelledby="h-where">
+        <h2 id="h-where"><span class="n">2</span>Odkud půjdete?</h2>
+        <div id="homebox"></div>
+        <form class="locrow" id="locform" autocomplete="off">
+          <input id="addr" type="text" placeholder="Ulice a město, nebo PSČ" aria-label="Adresa nebo PSČ domova">
+          <button type="submit">Najít</button>
+        </form>
+        <button type="button" class="btn2 full" data-act="gps">Použít moji polohu</button>
+        <p class="help" id="locmsg" role="status"></p>
+      </section>
+
+    </div>
+
+    <div class="out">
+      <h2><span class="n">4</span>Váš plán nákupu</h2>
+      <div class="out2" id="plan"></div>
+    </div>
+  </div>
+
+  <footer>Akce: veřejné letáky řetězců Kaufland, Penny, Lidl, Billa a Globus, aktualizace jednou denně. Pozice prodejen: © přispěvatelé OpenStreetMap (ODbL). Ceny a dostupnost vždy ověřte v obchodě. <button type="button" class="linkbtn" data-act="contact">Napište nám</button></footer>
+</div>
+
+<dialog id="contactdlg" class="contactdlg" aria-labelledby="h-contact">
+  <form id="contactform" novalidate>
+    <h2 id="h-contact">Napište nám</h2>
+    <p class="help">Máte dotaz, nápad nebo jste našli chybu? Napište nám, odpovíme vám e-mailem.</p>
+    <label for="c-email">Váš e-mail (pro odpověď)</label>
+    <input id="c-email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" required>
+    <label for="c-msg">Zpráva</label>
+    <textarea id="c-msg" rows="6" maxlength="2000" required></textarea>
+    <input id="c-web" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+    <p class="err" id="c-err" role="alert"></p>
+    <div class="row">
+      <button type="submit" class="go" id="c-go">Odeslat</button>
+      <button type="button" class="btn" data-act="contact-close">Zavřít</button>
+    </div>
+  </form>
+</dialog>
+
+<style>.grps{grid-column:1/-1;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.3rem}
+.grps button{border:2px solid var(--line);background:#fff;color:inherit;border-radius:999px;padding:.35rem .9rem;font:inherit;font-size:.95rem;cursor:pointer}
+.grps button[aria-pressed="true"]{border-color:var(--burst-red);font-weight:700}
+/* --- v3: úvodní stránka, účet, sdílení --- */
+.landing{min-height:100vh;background:var(--paper)}
+.lwrap{max-width:640px;margin:0 auto;padding:1rem 1rem 3rem}
+.lhead{display:flex;align-items:center;gap:.7rem;padding:.4rem 0 1rem}
+.lhead svg{width:44px;height:44px}
+.lname{font-family:var(--display,inherit);font-weight:900;font-size:1.35rem}
+.hero h1{font-size:clamp(1.7rem,6vw,2.4rem);line-height:1.15;margin:.2rem 0 .8rem}
+.lead{font-size:1.15rem;margin:0 0 1rem;color:var(--ink)}
+.points{list-style:none;margin:0 0 1.4rem;padding:0;display:grid;gap:.6rem}
+.points li{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--burst);border-radius:12px;padding:.7rem .9rem;font-size:1.05rem}
+.authcard h2{margin:0 0 .7rem;font-size:1.2rem}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.9rem}
+.tabs button{min-height:3rem;border:2px solid var(--line);background:var(--card);border-radius:12px;font-weight:800;color:inherit}
+.tabs button[aria-selected="true"]{border-color:var(--ink);background:var(--ink);color:var(--card)}
+#authform label,.sharebox label{display:block;font-weight:700;margin:.7rem 0 .25rem}
+#authform .hint{font-weight:400;color:var(--muted);font-size:.9rem}
+#authform input[type=email],#authform input[type=password],#authform input[type=text],.sharebox input[type=text],.acct input[type=password]{width:100%;height:3.3rem;border:2px solid var(--ink);border-radius:12px;padding:0 .8rem;font:inherit;background:var(--card);color:var(--ink)}
+#authform label.showpw{font-weight:400;display:flex;align-items:center;gap:.5rem;margin-top:.5rem}
+#authform label.showpw input{width:1.2rem;height:1.2rem}
+.err{color:var(--promo);font-weight:700;margin:.6rem 0 0;min-height:1.2rem}
+.go{width:100%;min-height:3.4rem;margin-top:.5rem;border:0;border-radius:12px;background:var(--promo);color:#fff;font-weight:800;font-size:1.1rem}
+.go[disabled]{opacity:.6}
+.fine{color:var(--muted);font-size:.88rem;margin:.7rem 0 0}
+.lfoot{color:var(--muted);font-size:.85rem;margin:1.2rem 0 0}
+.acct{display:flex;flex-wrap:wrap;gap:.4rem .9rem;align-items:center;justify-content:space-between;margin:0 0 10px;font-size:.92rem;color:var(--muted)}
+.acct .who b{color:var(--ink)}
+.acct .acts{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
+.acct a,.acct .linkbtn{color:var(--route);font-weight:700;text-decoration:underline;background:none;border:0;padding:0;font:inherit;font-weight:700;cursor:pointer}
+.acct details{flex-basis:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.5rem .8rem}
+.acct details summary{cursor:pointer;font-weight:700}
+.acct details form{display:grid;gap:.5rem;margin-top:.6rem}
+.sharebox{margin-top:1rem;border-top:1px solid var(--line);padding-top:.9rem}
+.sharebox h3{margin:0 0 .3rem;font-size:1.05rem}
+.sharebox .row{display:flex;flex-wrap:wrap;gap:.5rem;margin:.6rem 0}
+.sharebox .btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:inherit;padding:0 1rem;font-size:1rem}
+.sharebox .btn.wa{background:#1f8f4e;border-color:#1f8f4e;color:#fff}
+.sharebox .code{font-family:ui-monospace,Menlo,monospace;font-weight:800;letter-spacing:.06em;font-size:1.1rem}
+.sharebox .syn{color:var(--muted);font-size:.88rem}
+.sharebox .syn.bad{color:var(--promo);font-weight:700}
+.sharebox details{margin-top:.5rem}
+.sharebox details summary{cursor:pointer;font-weight:700}
+.sharebox .joinrow{display:flex;gap:.5rem;margin-top:.5rem}
+.sharebox .joinrow button{min-height:3.3rem;border:2px solid var(--ink);border-radius:12px;background:var(--ink);color:var(--card);font-weight:800;padding:0 1rem}
+.toast{background:var(--route-bg);border-radius:12px;padding:.6rem .8rem;margin:0 0 10px;font-weight:600}
+
+.lastbtn{width:100%;margin-top:.8rem;justify-content:center}
+.lastmeta{font-weight:400;color:var(--muted)}
+.lastpanel{margin-top:.6rem;border:2px solid var(--line);border-radius:12px;padding:.7rem .8rem}
+.lastlist{list-style:none;margin:.4rem 0 0;padding:0}
+.lastlist li{display:flex;align-items:center;justify-content:space-between;gap:.6rem;border-top:1px solid var(--line);padding:.35rem 0}
+.lastlist li:first-child{border-top:0}
+.lastlist label{display:flex;align-items:center;gap:.6rem;flex:1;min-height:2.6rem;font-weight:600}
+.lastlist input{width:1.4rem;height:1.4rem;flex:none}
+.lastlist em{font-weight:400;color:var(--muted);font-size:.85rem}
+.lastlist .rm{grid-column:auto}
+li.finish{grid-column:1/-1;padding:.7rem 0 0;border-top:1px solid var(--line)}
+li.finish .btn{width:100%}
+
+.th{width:3.2rem;height:3.2rem;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;flex:none}
+.matches .mi{display:flex;align-items:center;gap:.6rem;min-width:0}
+.item label{align-items:center}
+.item label .th{margin:0 .1rem}
+
+.matches li.on{border-color:var(--accent,#1a6b3a);background:rgba(26,107,58,.07)}
+.matches label.mi{cursor:pointer;flex:1}
+.matches input[type=checkbox]{width:1.5rem;height:1.5rem;flex:none}
+.addbig[disabled]{opacity:.45}
+.addbig.alt{margin-top:.5rem;background:transparent;color:inherit;border:2px solid currentColor}
+
+/* --- v4: příjemnější barvy a ilustrace (paleta „Modrá obloha“) --- */
+:root{
+  --paper:#F3F7FC; --card:#FFFFFF; --ink:#1B2A3D; --muted:#506178; --line:#D6E0EE;
+  --promo:#C2410C; --burst:#FFC93C; --burst-ink:#1B2A3D; --burst-red:#C2410C;
+  --go:#1D63B8; --on-go:#FFFFFF;
+  --route:#0A7373; --route-bg:#DFF3F2; --on-route:#FFFFFF;
+  --hero-a:#DCEBFB; --hero-b:#FFF3D6; --shadow:0 2px 10px rgba(30,60,110,.10);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1A2B; --card:#17263B; --ink:#EAF1FB; --muted:#A9B8CE; --line:#2B3E5A;
+    --promo:#FF9E80; --go:#6BA8F0; --on-go:#07182E; --route:#5CD0CF; --route-bg:#123A3F; --on-route:#04201F;
+    --hero-a:#17304F; --hero-b:#2A2B1E; --shadow:0 2px 10px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1A2B; --card:#17263B; --ink:#EAF1FB; --muted:#A9B8CE; --line:#2B3E5A;
+  --promo:#FF9E80; --go:#6BA8F0; --on-go:#07182E; --route:#5CD0CF; --route-bg:#123A3F; --on-route:#04201F;
+  --hero-a:#17304F; --hero-b:#2A2B1E; --shadow:0 2px 10px rgba(0,0,0,.35);
+}
+body{background:linear-gradient(180deg,var(--hero-b) 0,var(--paper) 340px) var(--paper) no-repeat}
+.landing{background:transparent}
+h1,.lname{color:var(--go)}
+.card{border-radius:20px;box-shadow:var(--shadow)}
+.card h2{display:flex;align-items:center;gap:.5rem}
+.authcard h2::before{content:"";width:.5rem;height:1.1em;border-radius:4px;background:var(--burst);flex:none}
+h2 .n{background:var(--go);color:var(--on-go)}
+.btn.pri{background:var(--go);border-color:var(--go);color:var(--on-go)}
+.go{background:var(--go);color:var(--on-go);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.tabs button[aria-selected="true"]{background:var(--go);border-color:var(--go);color:var(--on-go)}
+.sizes button[aria-pressed="true"]{background:var(--go);border-color:var(--go);color:var(--on-go)}
+.sizes button{border-color:var(--line)}
+.demo{background:var(--hero-b);border:1px solid var(--line);color:var(--ink)}
+.points li{display:flex;gap:.8rem;align-items:center;border-left-width:1px;border-radius:16px;box-shadow:var(--shadow)}
+.points .ic{flex:none;width:2.6rem;height:2.6rem;border-radius:50%;background:var(--hero-a);display:grid;place-items:center}
+.points .ic svg{width:1.6rem;height:1.6rem}
+.hero .scene{display:block;width:100%;height:auto;border-radius:24px;margin:.2rem 0 1.1rem;box-shadow:var(--shadow);background:linear-gradient(180deg,var(--hero-a),var(--hero-b))}
+.brandpic{width:112px;height:auto;flex:none;margin-left:auto}
+@media (max-width:760px){.brandpic{display:none}}
+.top{background:linear-gradient(90deg,var(--hero-a),var(--hero-b));border:1px solid var(--line);border-radius:22px;padding:.7rem 1rem;box-shadow:var(--shadow)}
+.layout{grid-template-columns:minmax(0,1fr)}
+@media (min-width:920px){.layout{grid-template-columns:minmax(340px,400px) minmax(0,1fr)}}
+.inputs button[type="submit"]{background:var(--go);color:var(--on-go);border-color:var(--go)}
+.inputs,.out,.out2{grid-template-columns:minmax(0,1fr)}
+
+.cfrow{display:flex;gap:.4rem;flex-wrap:wrap;margin:.2rem 0 .6rem}
+.cfrow button{border:2px solid var(--line);background:var(--card);color:inherit;border-radius:999px;padding:.3rem .8rem;font:inherit;font-size:.92rem;cursor:pointer}
+.cfrow button[aria-pressed="true"]{background:var(--go);border-color:var(--go);color:var(--on-go);font-weight:700}
+.btn.danger{color:#9b2c1d;border-color:#d9a79f}
+.finish .btn{margin:.25rem .25rem .25rem 0}
+.appshare{background:var(--card,#fff);border:1px solid rgba(0,0,0,.08);border-radius:18px;padding:1rem 1.1rem;margin:.8rem 0}
+.appshare{padding:.7rem 1.1rem}
+.appshare summary{font-size:1.15rem;font-weight:700;cursor:pointer;list-style-position:inside}
+.appshare .row{display:flex;flex-wrap:wrap;gap:.5rem}
+.appshare .btn[hidden]{display:none}
+.radii{display:flex;flex-wrap:wrap;gap:.5rem .9rem;align-items:center}.radii .help{flex:0 0 100%}.radii label{font-weight:600;display:flex;gap:.35rem;align-items:center}.radii select{font:inherit;padding:.35rem .5rem;border-radius:10px;border:2px solid #cdbfa5;background:#fff}
+
+.cattabs{display:flex;gap:.4rem;margin:.6rem 0 .2rem;border-bottom:3px solid rgba(0,0,0,.08)}
+.cattabs button{flex:1;font:inherit;font-weight:800;font-size:1.05rem;padding:.75rem .5rem;border:2px solid transparent;border-bottom:0;border-radius:14px 14px 0 0;background:var(--line);color:var(--muted);cursor:pointer;min-height:48px}
+.cattabs button[aria-selected="true"]{background:var(--go);color:var(--on-go)}
+html[data-cat="drug"] [data-fmtrow],html[data-cat="drug"] .fmtrow{display:none}
+@media print{.cattabs{display:none}}
+
+.contactdlg{border:2px solid var(--ink);border-radius:16px;padding:1rem 1.1rem;max-width:min(32rem,92vw);width:100%;background:var(--card);color:var(--ink)}
+.contactdlg::backdrop{background:rgba(0,0,0,.45)}
+.contactdlg form{display:grid;gap:.5rem}
+.contactdlg h2{margin:0}
+.contactdlg input[type=email],.contactdlg textarea{width:100%;border:2px solid var(--ink);border-radius:12px;padding:.6rem .8rem;font:inherit;background:var(--card);color:var(--ink);box-sizing:border-box}
+.contactdlg input[type=email]{height:3.3rem}
+.contactdlg .row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.3rem}
+footer .linkbtn,.lfoot .linkbtn{color:var(--route);font-weight:700;text-decoration:underline;background:none;border:0;padding:0;font:inherit;font-weight:700;cursor:pointer}
+@media print{.contactdlg{display:none!important}}
+.sortrow{display:block;margin:.2rem 0 .5rem;font-size:.95rem}
+.sortrow select{font:inherit;padding:.3rem .5rem;border:2px solid var(--line);border-radius:.6rem;background:var(--card);color:inherit;max-width:100%}
+.relbox{margin:.8rem 0;border:1px dashed var(--line);border-radius:.8rem;padding:.4rem .7rem}
+.relbox summary{cursor:pointer;font-weight:600;color:var(--muted);padding:.3rem 0}
+</style>
+<script>
+/*CORE-START*/
+const ROAD = 1.3;
+const HOME = {x:0, y:0};
+const MODES = {
+  foot:{label:'Pěšky', radius:3000, speed:3.5, wait:0, rate:10, verb:'chůze'},
+  bus: {label:'MHD',   radius:6000, speed:14,  wait:6, rate:7, verb:'cesta MHD'},
+  car: {label:'Autem', radius:30000, speed:28,  wait:3, rate:8, verb:'jízda autem'}
+};
+const THRESH = 15; // o kolik Kč smí být menší počet obchodů dražší, aby byl pořád doporučen
+const CHAIN_NAME = {kaufland:'Kaufland', penny:'Penny', lidl:'Lidl', billa:'Billa', globus:'Globus', albert:'Albert', norma:'Norma', coop:'Coop', terno:'Terno', dm:'dm', rossmann:'Rossmann', teta:'Teta'};
+const DRUG_CHAINS = ['dm','rossmann','teta'];
+const FOOD_CHAINS = ['kaufland','penny','lidl','billa','globus','albert','norma','coop','terno'];
+
+const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+const words = s => norm(s).split(/[^a-z0-9]+/).filter(Boolean);
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y) * ROAD;
+
+/* ---- souřadnice: lat/lon -> metry od domova ---- */
+function toXY(home, lat, lon){
+  const k = Math.cos(home.lat*Math.PI/180);
+  return {x:(lon-home.lon)*111320*k, y:-(lat-home.lat)*110540};
+}
+
+/* ---- jednotková cena ("(=100 g 8,90)", "1 kg 99,80 Kč", "500 g balení") ---- */
+function num(s){ return parseFloat(String(s).replace(/\s/g,'').replace(',','.')); }
+function unitInfo(it){
+  const clean = x => String(x||'').replace(/ /g,' ');
+  const toBase = (q,u) => {
+    u = u.toLowerCase();
+    if (u === 'kg') return {t:'w', f:q};
+    if (u === 'g')  return {t:'w', f:q/1000};
+    if (u === 'l')  return {t:'v', f:q};
+    if (u === 'ml') return {t:'v', f:q/1000};
+    return {t:'p', f:q};
+  };
+  let m = clean(it.basePrice).match(/(\d+(?:,\d+)?)\s*(kg|g|l|ml|kus|ks)\b\D*?(\d[\d ]*(?:,\d+)?)/i);
+  if (m) { const b = toBase(num(m[1]), m[2]); const per = num(m[3]) / b.f; if (isFinite(per)) return {t:b.t, per}; }
+  m = clean(it.unit).match(/^(\d+(?:,\d+)?)\s*(kg|g|l|ml|kus|ks)\b/i);
+  if (m && it.price) { const b = toBase(num(m[1]), m[2]); const per = it.price / b.f; if (isFinite(per)) return {t:b.t, per}; }
+  return null;
+}
+
+/* ---- vyhledávání akcí ---- */
+function matchItems(items, term){
+  const tk = words(term);
+  if (!tk.length) return [];
+  return items.filter(it => {
+    const w = it._w || (it._w = words((it.title||'') + ' ' + (it.subtitle||'')));
+    return tk.every(t => w.some(x => x.startsWith(t)));
+  });
+}
+/* Relevance: 1 = hledané slovo je v názvu celé (i v jiném pádu nebo čísle), 2 = je tam, ale jako část jiného zboží
+   (arašídové máslo, sójové mléko, tělové mléko), 3 = jen začátek slova (máslový, máslová příchuť). */
+const SUFFIX = new Set(['', 'a', 'e', 'i', 'y', 'u', 'em', 'ech', 'um', 'ou', 'ami', 'ach']);
+const MODS = new Set(['arasidove','mandlove','liskooriskove','kesu','sezamove','kokosove','bambucke','shea','telove','pletove','cistici','sojove','ovesne','ryzove','rostlinne','hrachove','konopne','kokosovy','dekorativni']);
+const isForm = (w, t) => { if (w === t) return true; const st = (t.length >= 4 && /[aeiouy]$/.test(t)) ? t.slice(0, -1) : t; return w.startsWith(st) && SUFFIX.has(w.slice(st.length)); };
+function relTier(it, tk){
+  const tw = it._tw || (it._tw = words(it.title || ''));
+  const fw = it._w || (it._w = words((it.title||'') + ' ' + (it.subtitle||'')));
+  let tier = 0;
+  for (const t of tk) {
+    const idx = tw.findIndex(w => isForm(w, t));
+    let r;
+    if (idx >= 0) r = (idx > 0 && MODS.has(tw[idx-1]) && !tk.includes(tw[idx-1])) ? 2 : 1;
+    else if (fw.some(x => x.startsWith(t))) r = 3;
+    else return 0;
+    if (r > tier) tier = r;
+  }
+  return tier;
+}
+/* {main: nejlepší shody, rel: slabší (související) shody}; main je prázdné jen když není nic */
+function matchSplit(items, term){
+  const tk = words(term);
+  if (!tk.length) return {main:[], rel:[]};
+  const hits = [];
+  items.forEach(it => { const r = relTier(it, tk); if (r) hits.push([it, r]); });
+  if (!hits.length) return {main:[], rel:[]};
+  const best = Math.min(...hits.map(h => h[1]));
+  return {main: hits.filter(h => h[1] === best).map(h => h[0]), rel: hits.filter(h => h[1] > best).map(h => h[0])};
+}
+const matchBest = (items, term) => matchSplit(items, term).main;
+/* řazení nabídek: price | price_desc | unit (cena za kg/l/ks) | disc (největší sleva) */
+function sortOffers(list, mode, cards){
+  const p = it => (cards && it.cardPrice) ? it.cardPrice : (it.price || 0);
+  const up = it => { const u = unitInfo(it); return u && it.price ? u.per * (p(it) / it.price) : null; };
+  const a = list.slice();
+  if (mode === 'price_desc') return a.sort((x, y) => p(y) - p(x));
+  if (mode === 'unit') return a.sort((x, y) => { const ux = up(x), uy = up(y); return (ux == null) - (uy == null) || (ux ?? 0) - (uy ?? 0) || p(x) - p(y); });
+  if (mode === 'disc') return a.sort((x, y) => (y.discount || 0) - (x.discount || 0) || p(x) - p(y));
+  return a.sort((x, y) => p(x) - p(y));
+}
+const todayIso = d => { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+function validNow(it, iso){ return (!it.validFrom || it.validFrom <= iso) && (!it.validTo || it.validTo >= iso); }
+
+/* nejlevnější nabídka řetězce pro hledaný výraz (podle ceny za jednotku, jinak za balení) */
+function bestOffer(items, term, chain, cards){
+  const c = matchBest(items.filter(i => i.chain === chain), term);
+  if (!c.length) return null;
+  const eff = it => (cards && it.cardPrice) ? it.cardPrice : it.price;
+  const scored = c.map(it => {
+    const u = unitInfo(it); const p = eff(it);
+    const up = u && it.price ? u.per * (p / it.price) : null;
+    return {it, p, u: u && u.t, up};
+  }).filter(x => x.p > 0);
+  if (!scored.length) return null;
+  const tc = {}; scored.forEach(x => { if (x.u) tc[x.u] = (tc[x.u]||0) + 1; });
+  const dom = Object.keys(tc).sort((a,b) => tc[b]-tc[a])[0];
+  const pool = dom ? scored.filter(x => x.u === dom) : scored;
+  pool.sort((a,b) => (a.up ?? 1e9) - (b.up ?? 1e9) || a.p - b.p);
+  const b = pool[0], it = b.it;
+  const usingCard = !!(cards && it.cardPrice && it.cardPrice < it.price);
+  const regular = it.oldPrice || it.price;
+  const pct = regular > b.p ? Math.round((1 - b.p/regular)*100) : 0;
+  return {item: it, price: b.p, regular, pct, card: usingCard, cardOnly: false, count: c.length,
+          cardAvail: !!(it.cardPrice && it.cardPrice < it.price)};
+}
+
+/* ---- plánování ---- */
+function legMin(m, mode){ const M = MODES[mode]; return m/1000/M.speed*60 + M.wait; }
+function perms(a){
+  if (a.length <= 1) return [a.slice()];
+  const out = [];
+  a.forEach((x,i) => perms(a.filter((_,j) => j !== i)).forEach(r => out.push([x, ...r])));
+  return out;
+}
+function combos(a, k){
+  const out = [];
+  (function rec(start, cur){
+    if (cur.length === k) { out.push(cur.slice()); return; }
+    for (let i = start; i < a.length; i++) { cur.push(a[i]); rec(i+1, cur); cur.pop(); }
+  })(0, []);
+  return out;
+}
+function bestRoute(stores){
+  let best = null;
+  for (const order of perms(stores)) {
+    const pts = [HOME, ...order, HOME];
+    const legs = []; let t = 0;
+    for (let i = 0; i < pts.length-1; i++) { const d = dist(pts[i], pts[i+1]); legs.push(d); t += d; }
+    if (!best || t < best.t - 1e-6) best = {order, legs, t};
+  }
+  return best;
+}
+/* lines: [{p:{id,name}, qty, offers:{chain:offer}}] */
+function makeOption(subset, lines, mode){
+  const by = new Map();
+  for (const line of lines) {
+    let best = null;
+    for (const s of subset) {
+      const o = line.offers[s.chain];
+      if (!o) continue;
+      if (!best || o.price < best.o.price - 1e-9 ||
+          (Math.abs(o.price-best.o.price) < 1e-9 && dist(HOME,s) < dist(HOME,best.s))) best = {s, o};
+    }
+    if (!best) return null;
+    if (!by.has(best.s.id)) by.set(best.s.id, []);
+    by.get(best.s.id).push({p:line.p, qty:line.qty, o:best.o});
+  }
+  if (by.size < subset.length) return null;
+  const SBY = Object.fromEntries(subset.map(s => [s.id, s]));
+  const used = [...by.keys()].map(id => SBY[id]);
+  const r = bestRoute(used);
+  const stops = r.order.map((s,i) => {
+    const items = by.get(s.id);
+    return {
+      store:s, items,
+      subtotal: items.reduce((a,it) => a + it.o.price*it.qty, 0),
+      regular:  items.reduce((a,it) => a + it.o.regular*it.qty, 0),
+      legM:r.legs[i], legMin:Math.round(legMin(r.legs[i], mode))
+    };
+  });
+  const backM = r.legs[r.legs.length-1];
+  const total = stops.reduce((a,s) => a + s.subtotal, 0);
+  const regular = stops.reduce((a,s) => a + s.regular, 0);
+  const km = r.t/1000;
+  const moveMin = r.legs.reduce((a,m) => a + legMin(m, mode), 0);
+  const travel = km * MODES[mode].rate;
+  return {
+    key:r.order.map(s => s.id).sort().join('+'),
+    stops, backM, backMin:Math.round(legMin(backM, mode)),
+    total, regular, km, minutes:Math.round(moveMin + 10*stops.length),
+    travel, score:total + travel,
+    dealCount: stops.reduce((a,s) => a + s.items.filter(it => it.o.pct > 0).length, 0),
+    itemCount: stops.reduce((a,s) => a + s.items.length, 0)
+  };
+}
+const fmtOk = (s, fmt) => fmt === 'all' || (fmt === 'super' ? s.kind !== 'hypermarket' : s.kind === 'hypermarket');
+/* z každé kategorie (řetězec+typ) nechá jen nejbližší prodejny v dosahu */
+function nearestPerChain(stores, perChain){
+  const g = {};
+  stores.slice().sort((a,b) => dist(HOME,a) - dist(HOME,b)).forEach(s => { (g[s.chain] = g[s.chain] || []).push(s); });
+  return Object.values(g).flatMap(a => a.slice(0, perChain));
+}
+/* řetězce, které mají v dosahu (podle způsobu dopravy a typu prodejny) aspoň jednu prodejnu */
+function chainsInRange(stores, mode, fmt){
+  const set = new Set();
+  stores.forEach(s => { if (dist(HOME,s) <= MODES[mode].radius && fmtOk(s, fmt || 'all')) set.add(s.chain); });
+  return set;
+}
+function plan(lines, stores, mode, max, fmt){
+  const ranged = stores.filter(s => dist(HOME,s) <= MODES[mode].radius && fmtOk(s, fmt || 'all'));
+  const inRange = nearestPerChain(ranged, 2);
+  if (!lines.length) return {inRange, options:[]};
+  const bestByK = {}; const singles = [];
+  for (let k = 1; k <= max; k++) {
+    for (const sub of combos(inRange, k)) {
+      if (new Set(sub.map(s => s.chain)).size < sub.length) continue; // dvě pobočky stejného řetězce nedávají smysl
+      const o = makeOption(sub, lines, mode);
+      if (!o) continue;
+      if (k === 1) singles.push(o);
+      if (!bestByK[k] || o.score < bestByK[k].score) bestByK[k] = o;
+    }
+  }
+  const options = [];
+  for (let k = 1; k <= max; k++) {
+    const c = bestByK[k];
+    if (c && (!options.length || c.score < options[options.length-1].score - 0.005)) options.push(c);
+  }
+  if (!options.length) return {inRange, options:[]};
+  const bestOpt = options.reduce((a,b) => b.score < a.score ? b : a);
+  const rec = options.find(o => o.score <= bestOpt.score + THRESH);
+  const baseline = singles.slice().sort((a,b) => dist(HOME,a.stops[0].store) - dist(HOME,b.stops[0].store))[0] || options[0];
+  return {inRange, options, rec, bestOpt, baseline};
+}
+
+/* ---- druh zboží (potraviny / drogerie / ostatní) ---- */
+const GROUP_NAME = {potraviny:'Potraviny', drogerie:'Drogerie', ostatni:'Ostatní'};
+const RE_DROG = /telov|sprch|sampon|kondicion|pletov|zubni|ustni|deodor|mydl|praci |prani |avivaz|cistic|saponat|toaletni papir|kapesnik|ubrousk|plenk|vlozk|holic|parfem|vlasov|odlicovac|make-?up|rtenk|krem na|gel na|do mycky|dezinfek|odstranovac|pro vlasy|na vlasy|sampon/;
+const RE_OSTATNI = /lego|hracka|hracky|puzzle|panenk|hrnec|panev|vysavac|mixer|konvice|baterie|zarovk|svicka|dekorac|ponozk|obleceni|bunda|boty|naradi|vrtack|pro psy|pro kocky|kocici|krmivo|granule|kapsicky pro|\bdog\b|\bcat\b/;
+function itemGroup(it){
+  if (it._g) return it._g;
+  if (DRUG_CHAINS.includes(it.chain)) return (it._g = 'drogerie');
+  const c = norm(it.category||''), t = norm(it.title||'');
+  let g = null;
+  if (it.chain === 'billa') g = /^(drogerie|pece o dite|domacnost)/.test(c) ? 'drogerie' : /^mazlicci/.test(c) ? 'ostatni' : (c ? 'potraviny' : null);
+  else if (it.chain === 'kaufland') g = /^drogerie/.test(c) ? 'drogerie' : /^spotrebni zbozi/.test(c) ? 'ostatni' : (/^(zakladni|mlecne|maso|napoje|ovoce|mrazene|lahudky|kava|cerstve)/.test(c) ? 'potraviny' : null);
+  else if (it.chain === 'lidl') g = /^(uklid|krasa|zdravi)/.test(c) ? 'drogerie' : /^(domacnost|kvetiny|krmivo)/.test(c) ? 'ostatni' : (c ? 'potraviny' : null);
+  if (!g) g = RE_DROG.test(t) ? 'drogerie' : RE_OSTATNI.test(t) ? 'ostatni' : 'potraviny';
+  return (it._g = g);
+}
+function groupCounts(items, term){
+  const cnt = {};
+  matchItems(items, term).forEach(i => { const g = itemGroup(i); cnt[g] = (cnt[g]||0) + 1; });
+  return cnt;
+}
+/* skupina, kterou použít: jen když hledání zasáhne víc druhů zboží (např. mléko x tělové mléko) */
+function effGroup(cnt, sel){
+  const ks = Object.keys(cnt);
+  if (ks.length < 2) return null;
+  if (sel && cnt[sel]) return sel;
+  return cnt.potraviny ? 'potraviny' : ks.sort((a,b) => cnt[b]-cnt[a])[0];
+}
+
+/* ---- společný seznam: sloučení dvou verzí (u každého klíče vyhrává novější změna) ---- */
+function mergeDocs(a, b){
+  a = a || {}; b = b || {};
+  const mm = (x, y) => { const o = Object.assign({}, x || {}); for (const k in (y || {})) if (!o[k] || y[k].t > o[k].t) o[k] = y[k]; return o; };
+  const at = a.cfg && a.cfg.t ? a.cfg.t : 0, bt = b.cfg && b.cfg.t ? b.cfg.t : 0;
+  const al = a.last && a.last.t ? a.last.t : 0, bl = b.last && b.last.t ? b.last.t : 0;
+  return {items: mm(a.items, b.items), done: mm(a.done, b.done), cfg: bt > at ? b.cfg : (a.cfg || {t:0, v:null}), last: bl > al ? b.last : (a.last || {t:0, v:null})};
+}
+/*CORE-END*/
+if (typeof module !== 'undefined') module.exports = {norm, words, toXY, unitInfo, matchItems, bestOffer, validNow, todayIso, plan, makeOption, MODES, HOME, dist, CHAIN_NAME, itemGroup, groupCounts, effGroup, GROUP_NAME};
+
+/*UI-START*/
+const $ = s => document.querySelector(s);
+const NBSP = ' ';
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtKc = v => (Math.round(v*100)/100).toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2}) + NBSP + 'Kč';
+const fmtKc0 = v => Math.round(v).toLocaleString('cs-CZ') + NBSP + 'Kč';
+const fmtDist = m => m < 950 ? Math.round(m/10)*10 + NBSP + 'm' : (m/1000).toLocaleString('cs-CZ',{maximumFractionDigits:1}) + NBSP + 'km';
+const dateCs = iso => { if(!iso) return ''; const [y,m,d] = iso.split('-'); return (+d) + '.' + NBSP + (+m) + '.'; };
+
+const state = {
+  basket: [],            // [{term, qty}]
+  home: null,            // {lat, lon, label}
+  sug:new Set(), cat:'food', mode:'car', rad:{foot:3000,bus:6000,car:30000}, chain:null, chs:{food:[],drug:[]}, sort:'price', max:2, cards:false, fmt:'all', sel:null, q:'', size:'m',
+  done:new Set(), copied:null, copyText:'',
+  tomb:{}, doneMap:{}, cfgT:0, pick:null,   // podklady pro společný seznam
+  last:null, lastT:0, lastOpen:false, lastOff:new Set()   // poslední nákup
+};
+let DATA = {items:[], updated:null, sources:{}};
+let STORES_ALL = [];
+let lastSel = null;
+
+/* ---- ukládání ---- */
+const KEYS = ['basket','home','cat','chs','sort','mode','rad','max','cards','fmt','size','tomb','doneMap','cfgT','pick','last','lastT'];
+function save(){ try { const o = {}; KEYS.forEach(k => o[k] = state[k]); localStorage.setItem('nsr1', JSON.stringify(o)); } catch(e){} }
+function load(){
+  try {
+    const s = JSON.parse(localStorage.getItem('nsr1')||'null');
+    if (s) KEYS.forEach(k => { if (s[k] !== undefined) state[k] = s[k]; });
+  } catch(e){}
+  // starší uložené položky nemají časové razítko: dostanou "velmi staré", aby je každá skutečná změna přebila
+  state.basket.forEach((b,i) => { if (!b.t) b.t = 1; if (!b.o) b.o = i + 1; });
+  state.done = new Set(Object.keys(state.doneMap).filter(k => state.doneMap[k].v));
+}
+function resetLocal(){
+  try { localStorage.removeItem('nsr1'); } catch(e){}
+  Object.assign(state, {basket:[], home:null, tomb:{}, doneMap:{}, cfgT:0, pick:null, sel:null, done:new Set(), copied:null, last:null, lastT:0, lastOpen:false, lastOff:new Set()});
+}
+const RAD_OPTS = {foot:[500,1000,1500,2000,3000,5000], bus:[1000,2000,3000,5000,8000,10000,15000], car:[5000,10000,15000,20000,30000]};
+const kmTxt = m => (m % 1000 ? (m / 1000).toString().replace('.', ',') : m / 1000) + ' km';
+function applyRad(){
+  ['foot','bus','car'].forEach(k => {
+    let v = +state.rad[k]; if (!(v > 0)) v = state.rad[k] = {foot:3000,bus:6000,car:30000}[k];
+    MODES[k].radius = v;
+    const lab = document.querySelector('[data-radlab="' + k + '"]'); if (lab) lab.textContent = 'obchody do ' + kmTxt(v);
+    const sel = document.querySelector('select[data-rad="' + k + '"]'); if (!sel) return;
+    const opts = RAD_OPTS[k].includes(v) ? RAD_OPTS[k] : RAD_OPTS[k].concat([v]).sort((a,b) => a - b);
+    if (sel.dataset.built !== opts.join()) { sel.innerHTML = opts.map(o => `<option value="${o}">${kmTxt(o)}</option>`).join(''); sel.dataset.built = opts.join(); }
+    sel.value = String(v);
+  });
+}
+const bcat = b => b.cat === 'drug' ? 'drug' : 'food';
+const bk = (term, cat) => (cat === 'drug' ? 'd~' : '') + norm(term);
+const catBasket = () => state.basket.filter(b => bcat(b) === state.cat);
+const catChains = () => state.cat === 'drug' ? DRUG_CHAINS : FOOD_CHAINS;
+const catFmt = () => state.cat === 'drug' ? 'all' : state.fmt;
+const touchCfg = () => { state.cfgT = Date.now(); };
+
+/* ---- data ---- */
+/* nabídky jen od řetězců, které mají prodejnu v dosahu zvoleného způsobu dopravy (bez zadané polohy se nefiltruje) */
+let _chainKey = '', _chainSet = null;
+function reachableChains(){
+  if (!state.home) return null;
+  const k = [state.home.lat, state.home.lon, state.mode, catFmt(), state.cat, STORES_ALL.length, MODES[state.mode].radius].join('|');
+  if (k !== _chainKey) {
+    _chainKey = k;
+    const st = nearbyStores(true);
+    _chainSet = chainsInRange(st, state.mode, catFmt());
+  }
+  return _chainSet;
+}
+function chSel(){ const a = (state.chs && state.chs[state.cat]) || []; return a.length ? new Set(a) : null; }
+function activeAll(){
+  const t = todayIso(), rc = reachableChains();
+  const src = state.cat === 'drug' ? DATA_DRUG.items : DATA.items;
+  return src.filter(i => validNow(i, t) && (!rc || rc.has(i.chain)));
+}
+function activeItems(){ const cs = chSel(), a = activeAll(); return cs ? a.filter(i => cs.has(i.chain)) : a; }
+function nearbyStores(all){
+  if (!state.home) return [];
+  const h = state.home;
+  const out = [];
+  const cc = catChains(), cs = all ? null : chSel();
+  STORES_ALL.forEach((s,i) => {
+    if (!cc.includes(s.chain) || (cs && !cs.has(s.chain))) return;
+    if (Math.abs(s.lat - h.lat) > 0.29 || Math.abs(s.lon - h.lon) > 0.46) return;
+    const xy = toXY(h, s.lat, s.lon);
+    out.push({id:s.chain + i, chain:s.chain, name:s.name, kind:s.kind, addr:[s.addr, s.city].filter(Boolean).join(', '), x:xy.x, y:xy.y});
+  });
+  return out;
+}
+function linesFor(){
+  const items = activeItems();
+  const lines = [], none = [];
+  catBasket().forEach(b => {
+    const offers = {};
+    const g = effGroup(groupCounts(items, b.term), b.grp);
+    const pool = g ? items.filter(i => itemGroup(i) === g) : items;
+    catChains().forEach(ch => { const o = bestOffer(pool, b.term, ch, state.cards); if (o) offers[ch] = o; });
+    if (Object.keys(offers).length) lines.push({p:{id:b.term, name:b.term}, qty:b.qty, offers});
+    else none.push(b);
+  });
+  return {lines, none};
+}
+
+/* ---- náhled produktu (obrázek z webu řetězce; když se nenačte, zmizí) ---- */
+const thumb = it => it && it.img ? `<img class="th" src="${esc(it.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
+
+/* ---- ozdoby ---- */
+function burstSvg(){
+  const n = 14, cx = 24, cy = 24, r1 = 23, r2 = 17; let pts = [];
+  for (let i = 0; i < n*2; i++) { const r = i % 2 ? r2 : r1, a = Math.PI*i/n - Math.PI/2; pts.push((cx + r*Math.cos(a)).toFixed(1) + ',' + (cy + r*Math.sin(a)).toFixed(1)); }
+  document.querySelectorAll('#burst,#burst2').forEach(el => el.innerHTML = `<polygon points="${pts.join(' ')}" fill="var(--burst)" stroke="var(--burst-red)" stroke-width="2" stroke-linejoin="round"/><text x="24" y="30" text-anchor="middle" font-family="Archivo,Arial,sans-serif" font-weight="900" font-size="17" fill="var(--burst-red)">%</text>`);
+}
+
+/* ---- poslední nákup ---- */
+const plural = n => n === 1 ? 'věc' : (n >= 2 && n <= 4 ? 'věci' : 'věcí');
+function renderLast(){
+  const el = $('#lastbox'); if (!el) return;
+  const L = state.last;
+  const myLast = L ? L.items.filter(x => (x.cat === 'drug' ? 'drug' : 'food') === state.cat) : [];
+  if (!L || !myLast.length) { el.innerHTML = ''; return; }
+  const d = new Date(L.at).toLocaleDateString('cs-CZ', {day:'numeric', month:'numeric'});
+  let h = `<button type="button" class="btn lastbtn" data-act="lasttoggle" aria-expanded="${state.lastOpen}">${state.lastOpen ? 'Skrýt poslední nákup' : 'Zobrazit poslední nákup'} <span class="lastmeta">(${d}, ${myLast.length}${NBSP}${plural(myLast.length)})</span></button>`;
+  if (state.lastOpen) {
+    const inList = new Set(catBasket().map(b => norm(b.term)));
+    h += `<div class="lastpanel"><p class="help" style="margin-top:0">Zaškrtněte, co chcete koupit znovu. Co už nechcete, smažte. Další zboží přidáte hledáním nahoře.</p><ul class="lastlist">` +
+      L.items.map((x, i) => (x.cat === 'drug' ? 'drug' : 'food') !== state.cat ? '' : `<li><label><input type="checkbox" data-lt="${i}"${state.lastOff.has(norm(x.term)) ? '' : ' checked'}><span>${esc(x.term)}${x.qty > 1 ? ' × ' + x.qty : ''}${inList.has(norm(x.term)) ? ' <em>(už v seznamu)</em>' : ''}</span></label><button type="button" class="rm" data-act="lastdel" data-i="${i}" aria-label="Smazat ${esc(x.term)} z posledního nákupu">Smazat</button></li>`).join('') +
+      `</ul><button type="button" class="addbig" data-act="lastadd">Přidat vybrané do seznamu</button></div>`;
+  }
+  el.innerHTML = h;
+}
+function finishShopping(){
+  const mine = catBasket();
+  if (!mine.length) return;
+  const now = Date.now();
+  const others = state.last ? state.last.items.filter(x => (x.cat === 'drug' ? 'drug' : 'food') !== state.cat) : [];
+  state.last = {at:now, items:others.concat(mine.map(b => ({term:b.term, qty:b.qty, grp:b.grp || null, cat:state.cat === 'drug' ? 'drug' : null})))}; state.lastT = now;
+  mine.forEach(b => { state.tomb[bk(b.term, bcat(b))] = now; });
+  state.basket = state.basket.filter(b => bcat(b) !== state.cat);
+  Object.keys(state.doneMap).forEach(k => { if (state.doneMap[k].v) state.doneMap[k] = {v:false, t:now}; });
+  state.done = new Set(); state.lastOff = new Set(); state.lastOpen = false;
+  reset(); renderAll(); window.scrollTo({top:0, behavior:'smooth'});
+  toast('Nákup uložen a seznam je prázdný. Ten starý najdete pod „Zobrazit poslední nákup“.');
+}
+function clearPlan(){
+  if (!catBasket().length && !state.sel && !state.done.size) { toast('Není co mazat, plán je prázdný.'); return; }
+  if (!window.confirm('Opravdu vymazat celý nákupní seznam a naplánovanou cestu? Poslední nákup, adresa domova a nastavení zůstanou.')) return;
+  const now = Date.now();
+  catBasket().forEach(b => { state.tomb[bk(b.term, bcat(b))] = now; });
+  state.basket = state.basket.filter(b => bcat(b) !== state.cat);
+  Object.keys(state.doneMap).forEach(k => { state.doneMap[k] = {v:false, t:now}; });
+  state.done = new Set();
+  reset(); renderAll(); window.scrollTo({top:0, behavior:'smooth'});
+  toast('Plán je vymazaný.');
+}
+function lastDelete(i){
+  if (!state.last) return;
+  state.last.items.splice(i, 1); state.lastT = Date.now();
+  if (!state.last.items.length) state.last = null;
+  save(); markDirty(); renderLast();
+}
+function lastAdd(){
+  if (!state.last) return;
+  const have = new Set(catBasket().map(b => norm(b.term))), now = Date.now(); let n = 0;
+  state.last.items.forEach((x, i) => {
+    if ((x.cat === 'drug' ? 'drug' : 'food') !== state.cat) return;
+    const k = norm(x.term); if (state.lastOff.has(k) || have.has(k)) return;
+    delete state.tomb[bk(x.term, state.cat)];
+    const b = {term:x.term, qty:x.qty, t:now, o:now + i}; if (x.grp) b.grp = x.grp; if (state.cat === 'drug') b.cat = 'drug';
+    state.basket.push(b); n++;
+  });
+  state.lastOpen = false; state.lastOff = new Set();
+  reset(); renderAll();
+  toast(n ? 'Přidáno do seznamu: ' + n + NBSP + plural(n) + '.' : 'Vybrané věci už v seznamu jsou.');
+}
+
+/* ---- vstupy ---- */
+function renderBasket(){
+  const el = $('#basket');
+  if (!catBasket().length) { el.innerHTML = `<li class="empty">Zatím nic. Napište třeba „${state.cat === 'drug' ? 'zubní pasta' : 'mléko'}“ a stiskněte Hledat.</li>`; return; }
+  const items = activeItems();
+  el.innerHTML = state.basket.map((b,i) => {
+    if (bcat(b) !== state.cat) return '';
+    const cnt = groupCounts(items, b.term), g = effGroup(cnt, b.grp);
+    const n = g ? cnt[g] : Object.values(cnt).reduce((s,x) => s + x, 0);
+    const chips = g ? `<span class="grps" role="group" aria-label="Druh zboží pro ${esc(b.term)}">` + Object.keys(cnt).sort((x,y) => cnt[y]-cnt[x]).map(k => `<button type="button" data-act="grp" data-i="${i}" data-v="${k}" aria-pressed="${k === g}">${GROUP_NAME[k]} (${cnt[k]})</button>`).join('') + '</span>' : '';
+    return `<li class="bi"><span class="nm">${esc(b.term)}<span class="what">${n ? n + ' akčních nabídek' : 'žádná akce'}</span></span>
+      <span class="step"><button type="button" data-act="dec" data-i="${i}" aria-label="Ubrat ${esc(b.term)}">−</button><output>${b.qty}</output><button type="button" data-act="inc" data-i="${i}" aria-label="Přidat ${esc(b.term)}">+</button></span>
+      <button type="button" class="rm" data-act="rm" data-i="${i}">Odebrat</button>${chips}</li>`;
+  }).join('') + '<li class="finish"><button type="button" class="btn" data-act="finish">Nákup hotový: uložit a vyprázdnit seznam</button> <button type="button" class="btn danger" data-act="clearplan">Vymazat plán</button></li>';
+}
+const sugRow = it => {
+  const on = state.sug.has(it.id);
+  return `<li class="${on ? 'on' : ''}"><label class="mi"><input type="checkbox" data-act="sugpick" data-id="${esc(it.id)}"${on ? ' checked' : ''}>${thumb(it)}<span><span class="ch">${esc(CHAIN_NAME[it.chain]||it.chain)}</span>${esc(it.title)}${it.subtitle ? ', ' + esc(it.subtitle) : ''}</span></label><span class="pr">${fmtKc(it.price)}</span></li>`;
+};
+function renderChainFilter(){
+  const el = $('#chainfilter'); if (!el) return;
+  const cnt = {}; activeAll().forEach(i => cnt[i.chain] = (cnt[i.chain]||0) + 1);
+  const chains = Object.keys(cnt).sort((a,b) => (CHAIN_NAME[a]||a).localeCompare(CHAIN_NAME[b]||b, 'cs'));
+  state.chs[state.cat] = (state.chs[state.cat] || []).filter(c => cnt[c]);
+  const sel = new Set(state.chs[state.cat]);
+  const dmNote = state.cat === 'drug' ? '<p class="help" style="margin:.4rem 0 0">dm drogerie nemá akční ceny (používá dlouhodobě nízké ceny), proto u ní akce nehledáme. Prodejnu dm najdete jen v seznamu obchodů.</p>' : '';
+  if (chains.length < 2) { el.innerHTML = dmNote; return; }
+  const chip = (v, label, on) => `<button type="button" data-act="chain" data-v="${v}" aria-pressed="${on}">${esc(label)}</button>`;
+  el.innerHTML = `<div class="cfrow" role="group" aria-label="Vyberte obchody, ve kterých chcete nakupovat">${chip('', 'Všechny', !sel.size)}${chains.map(c => chip(c, CHAIN_NAME[c] || c, sel.has(c))).join('')}</div><p class="help" style="margin:.3rem 0 0">${sel.size ? 'Hledáme i plánujeme trasu jen v: ' + esc([...sel].map(c => CHAIN_NAME[c] || c).join(', ')) + '. Klepnutím můžete přidat další.' : 'Klepnutím vyberte jen některé obchody (můžete i více).'}</p>${dmNote}`;
+}
+const SORTS = [['price','Nejlevnější nahoře'],['price_desc','Nejdražší nahoře'],['unit','Podle ceny za kg / litr'],['disc','Největší sleva']];
+const sortSel = () => `<label class="sortrow">Řadit: <select data-act="sort" aria-label="Řazení nabídek">${SORTS.map(([v,l]) => `<option value="${v}"${state.sort === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
+function renderSuggest(){
+  const el = $('#suggest'), q = state.q.trim();
+  const cs = chSel();
+  if (!q && !cs) { el.innerHTML = ''; return; }
+  const csName = cs ? [...cs].map(c => CHAIN_NAME[c] || c).join(', ') : '';
+  if (!q) {   // jen vybrané obchody bez hledaného slova: procházení jejich akcí
+    const pool = activeItems(), mine = sortOffers(pool, state.sort, state.cards).slice(0,40);
+    if (!pool.length) { el.innerHTML = `<p class="sugnote">U vybraných obchodů (${esc(csName)}) teď nemáme žádné akce.</p>`; return; }
+    el.innerHTML = `<p class="sugnote">${esc(csName)}: ${pool.length} akčních nabídek, ukazujeme ${mine.length}. Pro konkrétní zboží ho napište výše. Zaškrtněte, co chcete koupit:</p>${sortSel()}<ul class="matches">${mine.map(sugRow).join('')}</ul><button type="button" class="addbig" data-act="addpicked"${mine.some(i => state.sug.has(i.id)) ? '' : ' disabled'}>Přidat vybrané do seznamu</button>`;
+    return;
+  }
+  const all = activeItems(), cnt = groupCounts(all, q), g = effGroup(cnt, null);
+  const sp = matchSplit(all.filter(i => !g || itemGroup(i) === g), q), m = sp.main, relM = sp.rel;
+  const others = g ? Object.keys(cnt).filter(k => k !== g).map(k => GROUP_NAME[k].toLowerCase() + ' ' + cnt[k]).join(', ') : '';
+  if (!m.length) {
+    const rc0 = reachableChains();
+    if (rc0) {   // nabídky existují, ale jen u řetězců mimo dosah zvolené dopravy: vysvětlit, ne tvrdit "nic nenalezeno"
+      const raw = matchItems(DATA.items.filter(i => validNow(i, todayIso()) && !rc0.has(i.chain) && (!cs || cs.has(i.chain))), q);
+      if (raw.length) {
+        const names = [...new Set(raw.map(i => CHAIN_NAME[i.chain] || i.chain))].join(', ');
+        const how = {foot:'pěšky', bus:'MHD', car:'autem'}[state.mode];
+        const r = Math.round(MODES[state.mode].radius / 100) / 10;
+        el.innerHTML = `<p class="sugnote">Akce na „${esc(q)}“ jsou (${esc(names)}), ale ${how} do ${r} km od vás není žádný obchod těchto řetězců.</p>` + (state.mode !== 'car' ? `<button type="button" class="addbig" data-act="mode" data-v="car">Zkusit autem (do ${Math.round(state.rad.car / 1000)} km)</button>` : `<p class="sugnote">Zkuste zadat jinou adresu domova.</p>`);
+        return;
+      }
+    }
+  }
+  if (!m.length) { el.innerHTML = `<p class="sugnote">Nic v akci jsme nenašli. Zkuste jiné slovo, např. v jednotném čísle.</p><button type="button" class="addbig" data-act="addterm">Přidat „${esc(q)}“ do seznamu</button>`; return; }
+  const shown = sortOffers(m, state.sort, state.cards).slice(0,30), relShown = sortOffers(relM, state.sort, state.cards).slice(0,15);
+  const rows = shown.map(sugRow).join('');
+  const n = shown.filter(it => state.sug.has(it.id)).length;
+  const more = m.length > shown.length ? ` Zobrazeno ${shown.length} nabídek podle zvoleného řazení.` : '';
+  const rc = reachableChains(), note = rc ? ' Jen z řetězců, které mají prodejnu ve vašem dosahu.' : '';
+  el.innerHTML = `<p class="sugnote">Nalezeno ${m.length} akčních nabídek${g ? ' (' + GROUP_NAME[g].toLowerCase() + ')' : ''}.${more}${note} Zaškrtněte, co chcete koupit:${others ? '<br>Našli jsme i další druh zboží: ' + esc(others) + '. Po přidání do seznamu můžete přepnout.' : ''}</p>${sortSel()}<ul class="matches">${rows}</ul>${relShown.length ? `<details class="relbox"${state.relOpen ? ' open' : ''}><summary>Související zboží (${relM.length}), např. příchutě a jiné druhy</summary><ul class="matches">${relShown.map(sugRow).join('')}</ul></details>` : ''}<button type="button" class="addbig" data-act="addpicked"${n ? '' : ' disabled'}>Přidat vybrané do seznamu${n ? ' (' + n + ')' : ''}</button><button type="button" class="addbig alt" data-act="addterm">Nebo přidat obecně „${esc(q)}“</button>`;
+}
+function renderHome(){
+  const el = $('#homebox');
+  el.innerHTML = state.home ? `<p class="homeok">⌂ ${esc(state.home.label || 'Poloha nastavena')}</p>` : '<p class="help" style="margin:0">Zadejte adresu nebo PSČ, nebo použijte polohu telefonu. Adresu nikam neposíláme, jen ji převedeme na souřadnice.</p>';
+}
+function updateControls(){
+  document.querySelectorAll('[data-act="mode"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.mode));
+  document.querySelectorAll('[data-act="max"]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.v === state.max));
+  document.documentElement.dataset.cat = state.cat;
+  document.querySelectorAll('[data-act="cat"]').forEach(b => { const on = b.dataset.v === state.cat; b.setAttribute('aria-selected', on); b.setAttribute('aria-pressed', on); });
+  const qi = $('#q'); if (qi) qi.placeholder = state.cat === 'drug' ? 'Např. zubní pasta, prášek, šampon' : 'Např. mléko, jogurt, pračka';
+  document.querySelectorAll('[data-act="fmt"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.fmt));
+  document.querySelectorAll('[data-act="size"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.size));
+  const sw = document.querySelector('[data-act="cards"]'); sw.setAttribute('aria-checked', state.cards);
+  document.documentElement.dataset.size = state.size;
+  applyRad();
+  const M = MODES[state.mode];
+  $('#ratehelp').textContent = 'Cestu počítáme na ' + M.rate + ' Kč za km (' + M.verb + '). Díky tomu poznáme, kdy se objíždění obchodů nevyplatí.';
+  const n = $('#datanote');
+  const DD = state.cat === 'drug' ? DATA_DRUG : DATA;
+  if (!DATA.updated) { n.textContent = 'Načítám aktuální akce…'; return; }
+  const cnt = activeItems().length;
+  const ch = Object.entries(DD.sources||{}).filter(([k,v]) => v.ok).map(([k]) => CHAIN_NAME[k]||k).join(', ');
+  n.textContent = cnt ? `Aktuální akce: ${cnt} nabídek z řetězců ${ch}. Data z ${new Date(DD.updated || DATA.updated).toLocaleDateString('cs-CZ')}.` : (state.cat === 'drug' && !DATA_DRUG.updated ? 'Akce drogerií se teprve připravují, zkuste to později.' : 'Aktuální akce se zatím nepodařilo načíst.');
+}
+
+/* ---- mapa ---- */
+function mapSvg(opt, inRange){
+  const W = 360, H = 320, pad = 46;
+  const used = opt.stops.map(s => s.store);
+  const usedIds = new Set(used.map(s => s.id));
+  const pts = [HOME, ...inRange];
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
+  const sc = Math.min((W-2*pad)/Math.max(maxx-minx,300), (H-2*pad-12)/Math.max(maxy-miny,300), 0.5);
+  const cx = (minx+maxx)/2, cy = (miny+maxy)/2;
+  const X = x => W/2 + (x-cx)*sc, Y = y => H/2 - 6 + (y-cy)*sc;
+  const f = v => v.toFixed(1);
+  const nodes = [{x:X(0), y:Y(0), r:13, label:'Domov', kind:'home'}];
+  used.forEach((s,i) => nodes.push({x:X(s.x), y:Y(s.y), r:13, label:s.name, kind:'used', no:i+1}));
+  inRange.filter(s => !usedIds.has(s.id)).forEach(s => nodes.push({x:X(s.x), y:Y(s.y), r:5, label:s.name, kind:'dim'}));
+  const boxes = nodes.map(n => ({x0:n.x-n.r, x1:n.x+n.r, y0:n.y-n.r, y1:n.y+n.r}));
+  const hit = (a,b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+  const order = [...nodes.filter(n => n.kind==='used'), nodes[0], ...nodes.filter(n => n.kind==='dim')];
+  let labels = '';
+  for (const n of order) {
+    const w = n.label.length*7 + 4;
+    const cands = [
+      {x0:n.x-w/2, y0:n.y+n.r+3,  tx:n.x, ty:n.y+n.r+15, ax:'middle'},
+      {x0:n.x-w/2, y0:n.y-n.r-18, tx:n.x, ty:n.y-n.r-6,  ax:'middle'},
+      {x0:n.x+n.r+3, y0:n.y-9, tx:n.x+n.r+5, ty:n.y+4, ax:'start'},
+      {x0:n.x-n.r-3-w, y0:n.y-9, tx:n.x-n.r-5, ty:n.y+4, ax:'end'}
+    ].map(c => ({...c, x1:c.x0+w, y1:c.y0+15}));
+    const ok = cands.find(c => c.x0 > 2 && c.x1 < W-2 && c.y0 > 2 && c.y1 < H-2 && !boxes.some(b => hit(c,b))) || cands[0];
+    boxes.push({x0:ok.x0, x1:ok.x1, y0:ok.y0, y1:ok.y1});
+    labels += `<text class="lbl${n.kind==='dim'?' dim':''}" x="${f(ok.tx)}" y="${f(ok.ty)}" text-anchor="${ok.ax}">${esc(n.label)}</text>`;
+  }
+  const routePts = [HOME, ...used].map(p => f(X(p.x)) + ',' + f(Y(p.y))).join(' ');
+  const last = used[used.length-1];
+  let g = `<polyline points="${routePts}" fill="none" stroke="var(--route)" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>`;
+  g += `<line x1="${f(X(last.x))}" y1="${f(Y(last.y))}" x2="${f(X(0))}" y2="${f(Y(0))}" stroke="var(--route)" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round"/>`;
+  for (const n of nodes) {
+    if (n.kind === 'dim') g += `<circle cx="${f(n.x)}" cy="${f(n.y)}" r="5" fill="var(--muted)"/>`;
+    else if (n.kind === 'used') g += `<circle cx="${f(n.x)}" cy="${f(n.y)}" r="13" fill="var(--route)"/><text x="${f(n.x)}" y="${f(n.y+5)}" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-weight="800" font-size="15" fill="var(--on-route)">${n.no}</text>`;
+    else g += `<circle cx="${f(n.x)}" cy="${f(n.y)}" r="13" fill="var(--ink)"/><path d="M${f(n.x-7)} ${f(n.y+1)} L${f(n.x)} ${f(n.y-6)} L${f(n.x+7)} ${f(n.y+1)} V${f(n.y+7)} H${f(n.x-7)} Z" fill="var(--card)"/>`;
+  }
+  const bar = 500*sc;
+  g += `<line x1="12" y1="${H-14}" x2="${f(12+bar)}" y2="${H-14}" stroke="var(--muted)" stroke-width="3" stroke-linecap="round"/><text class="sm" x="${f(18+bar)}" y="${H-10}">500 m</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc('Schéma trasy: Domov, ' + used.map(s => s.name).join(', ') + ', Domov')}">${g}${labels}</svg>`;
+}
+
+/* ---- plán ---- */
+function itemHTML(it, store){
+  const o = it.o, line = o.price * it.qty, key = it.p.id;
+  const note = (o.item.validTo ? 'akce do ' + dateCs(o.item.validTo) : 'akce platí, dokud jsou zásoby') + (o.card ? ' · cena s kartou' : '');
+  return `<li class="item${state.done.has(key) ? ' done' : ''}">
+    <label><input type="checkbox" data-pid="${esc(key)}"${state.done.has(key) ? ' checked' : ''}>${thumb(o.item)}<span class="nm">${esc(o.item.title)}${o.item.subtitle ? ', ' + esc(o.item.subtitle) : ''}${it.qty > 1 ? ' × ' + it.qty : ''}</span></label>
+    <div class="pp">${o.pct > 0 ? `<span class="deal">Akce −${o.pct}${NBSP}%</span>` : ''}<span class="now">${fmtKc(line)}</span>${o.pct > 0 ? `<span class="was">${fmtKc(o.regular*it.qty)}</span>` : ''}${it.qty > 1 ? `<span class="unit">${it.qty} × ${fmtKc(o.price)}</span>` : ''}</div>
+    <div class="note">${esc(note)}</div></li>`;
+}
+function stopHTML(s, i, mode){
+  const from = i === 0 ? 'Od domova' : 'Od předchozího obchodu';
+  return `<li class="stop"><div class="sh"><span class="no">${i+1}</span><div><h3>${esc(s.store.name)}<span class="kind">${esc(s.store.kind)}</span></h3><p>${s.store.addr ? esc(s.store.addr) + ' · ' : ''}${from} ${fmtDist(s.legM)} · asi ${s.legMin}${NBSP}min (${MODES[mode].verb})</p></div></div>
+    <ul class="items">${s.items.map(it => itemHTML(it, s.store)).join('')}</ul>
+    <div class="sub"><span>Za tento obchod</span><span>${fmtKc(s.subtotal)}</span></div></li>`;
+}
+function planText(opt, none){
+  const out = ['Nákupní plán', 'Trasa: Domov → ' + opt.stops.map(s => s.store.name + (s.store.addr ? ' (' + s.store.addr + ')' : '')).join(' → ') + ' → Domov', ''];
+  opt.stops.forEach((s,i) => {
+    out.push((i+1) + ') ' + s.store.name);
+    s.items.forEach(it => out.push(' - ' + it.o.item.title + (it.qty > 1 ? ' × ' + it.qty : '') + ': ' + fmtKc(it.o.price*it.qty)));
+    out.push('');
+  });
+  if (none.length) out.push('Bez akce (koupit kdekoli): ' + none.map(b => b.term).join(', '), '');
+  out.push('Celkem v akci: ' + fmtKc(opt.total));
+  return out.join('\n');
+}
+function msg(t){ return '<section class="card"><p class="empty" style="margin:0">' + t + '</p></section>'; }
+function renderPlan(){
+  const el = $('#plan');
+  if (!catBasket().length) { el.innerHTML = msg('Přidejte do seznamu aspoň jednu věc. Pak tu uvidíte akční ceny a trasu.'); return; }
+  if (!(state.cat === 'drug' ? DATA_DRUG.items : DATA.items).length) { el.innerHTML = msg('Akce se zatím nenačetly. Zkuste stránku za chvíli obnovit.'); return; }
+  if (!state.home) { el.innerHTML = msg('Zadejte v kroku 2, odkud půjdete. Podle toho vybereme nejbližší obchody.'); return; }
+  const stores = nearbyStores();
+  if (!stores.length) { el.innerHTML = msg('V okolí vaší adresy jsme nenašli žádný obchod z našeho přehledu (' + (state.cat === 'drug' ? 'dm, Rossmann, Teta' : 'Kaufland, Penny, Lidl, Billa, Globus, Albert, Norma, Coop, Terno') + '). Zkuste jinou adresu nebo větší dosah.'); return; }
+  const {lines, none} = linesFor();
+  const noneHTML = none.length ? `<section class="card noaction"><b>Bez akce:</b> ${none.map(b => esc(b.term)).join(', ')}<p class="help">Tyto věci teď v akci nejsou. Koupíte je za běžnou cenu v kterémkoli obchodě po cestě.</p></section>` : '';
+  if (!lines.length) { el.innerHTML = msg('Pro nic z vašeho seznamu teď není akce v okolních obchodech.') + noneHTML; return; }
+  const res = plan(lines, stores, state.mode, state.max, catFmt());
+  if (!res.options.length) {
+    const why = state.cat !== 'drug' && state.fmt === 'hyper' && state.mode === 'foot' ? 'Hypermarkety jsou od domova dál, než dojdete pěšky. Zkuste MHD nebo auto, nebo zvolte typ obchodů „Vše“.' : 'V dosahu zvolené dopravy nemáme obchod s akcí na vaše zboží. Zkuste MHD nebo auto.';
+    el.innerHTML = msg(why) + noneHTML; return;
+  }
+  const { options, rec, baseline, bestOpt } = res;
+  const sel = options.find(o => o.key === state.sel) || rec;
+  state.sel = sel.key; lastSel = sel;
+  const net = baseline.score - sel.score, priceSaving = baseline.total - sel.total, extra = Math.max(0, sel.travel - baseline.travel);
+  const names = sel.stops.map(s => s.store.name);
+  const head = names.length === 1 ? 'Stačí jeden obchod: ' + esc(names[0]) : names.length + ' obchody: ' + esc(names.join(' → '));
+  const tag = net >= 1 ? `<span class="t1">ušetříte</span><span class="num">${Math.round(net)}<small>${NBSP}Kč</small></span>` : `<span class="t1">nákup za</span><span class="num">${Math.round(sel.total)}<small>${NBSP}Kč</small></span>`;
+  let p2 = '';
+  if (sel.key === baseline.key) p2 = sel === rec && options.length > 1 ? 'Další obchody by ušetřily méně, než stojí cesta k nim.' : '';
+  else p2 = 'Oproti nákupu jen v obchodě ' + esc(baseline.stops[0].store.name) + ' (nejblíž domovu) zaplatíte za zboží o ' + fmtKc0(Math.max(0, priceSaving)) + ' méně' + (extra >= 1 ? ', cesta navíc vás vyjde na asi ' + fmtKc0(extra) : '') + '.';
+  if (sel === rec && rec !== bestOpt) p2 += ' Ještě levnější by bylo ' + bestOpt.stops.length + ' obchody, ale ta úspora nestojí za další cestu.';
+  const warn = sel !== rec ? `<p>Toto není doporučená varianta. <button type="button" class="linkbtn" data-act="rec">Zobrazit doporučenou</button></p>` : '';
+  const verdict = `<section class="card verdict" aria-live="polite"><div class="tag">${tag}</div><div><h3>${head}</h3><p class="main">${fmtDist(sel.km*1000)} celkem · asi ${sel.minutes}${NBSP}min i s nákupem · ${sel.dealCount} z ${sel.itemCount} věcí v akci</p>${p2 ? `<p>${p2}</p>` : ''}${warn}</div></section>`;
+  let hint = '';
+  if (!state.cards) {
+    const {lines:l2} = (() => { const keep = state.cards; state.cards = true; const r = linesFor(); state.cards = keep; return r; })();
+    const r2 = plan(l2, stores, state.mode, state.max, catFmt());
+    if (r2.options.length) {
+      const diff = Math.min(...options.map(o => o.score)) - Math.min(...r2.options.map(o => o.score));
+      if (diff >= 5) hint = `<section class="card hint"><p>S věrnostními kartami (Penny, Lidl Plus) by akce vyšly ještě asi o <b>${fmtKc0(diff)}</b> levněji.</p><button type="button" class="btn" data-act="cardson">Mám karty</button></section>`;
+    }
+  }
+  const opts = options.length > 1 ? `<section class="card" aria-labelledby="h-opts"><h2 id="h-opts" style="font-size:1.05rem;margin-bottom:.6rem">Porovnání variant</h2><div class="opts" role="group" aria-labelledby="h-opts">${options.map(o => {
+    const n = baseline.score - o.score;
+    const nm = o.stops.length === 1 ? 'Jen ' + o.stops[0].store.name : o.stops.map(s => s.store.name).join(' + ');
+    const gain = o.key === baseline.key ? 'nejbližší obchod' : (n >= 1 ? 'o ' + fmtKc0(n) + ' výhodněji než nejbližší obchod' : 'jako nejbližší obchod');
+    return `<button type="button" class="opt" data-act="opt" data-key="${esc(o.key)}" aria-pressed="${o.key === sel.key}"><span class="st">${esc(nm)}${o === rec ? '<span class="badge">Doporučeno</span>' : ''}</span><span class="pr">${fmtKc0(o.total)}</span><span class="mt">${gain} · ${fmtDist(o.km*1000)} · asi ${o.minutes}${NBSP}min</span></button>`;
+  }).join('')}</div></section>` : '';
+  const map = `<section class="card map" aria-label="Schéma trasy">${mapSvg(sel, res.inRange)}<p class="cap">Schéma, ne přesná mapa. Čísla ukazují pořadí obchodů, čárkovaně je cesta domů.</p></section>`;
+  const steps = `<ol class="stops">${sel.stops.map((s,i) => stopHTML(s, i, state.mode)).join('')}</ol><div class="homeleg"><span aria-hidden="true">⌂</span><span>Cesta domů: ${fmtDist(sel.backM)} · asi ${sel.backMin}${NBSP}min</span></div>`;
+  const dealSave = sel.regular - sel.total;
+  state.copyText = planText(sel, none);
+  const totals = `<section class="card"><div class="tot"><span class="lab">Celkem za zboží v akci</span><span class="big">${fmtKc(sel.total)}</span></div>
+    <p class="tot-note">${dealSave >= 1 ? 'Akce vám v tomto plánu ušetří ' + fmtKc0(dealSave) + ' oproti běžným cenám.' : 'V tomto plánu nejsou žádné slevy oproti běžné ceně.'}</p>
+    <button type="button" class="btn pri" data-act="print">Vytisknout plán</button> <button type="button" class="btn" data-act="copy">${state.copied === 'ok' ? 'Zkopírováno' : 'Zkopírovat seznam'}</button>${state.done.size ? ' <button type="button" class="btn" data-act="undone">Zrušit odškrtnutí</button>' : ''} <button type="button" class="btn" data-act="finish">Nákup hotový</button> <button type="button" class="btn danger" data-act="clearplan">Vymazat plán</button>
+    ${state.copied === 'fail' ? `<p class="help">Zkopírování se nepovedlo. Text označte a zkopírujte ručně.</p><textarea class="copybox" readonly aria-label="Text nákupního plánu">${esc(state.copyText)}</textarea>` : ''}</section>`;
+  el.innerHTML = verdict + hint + noneHTML + opts + map + `<section class="out2">${steps}</section>` + totals;
+}
+
+function renderAll(){ renderBasket(); renderLast(); renderChainFilter(); renderSuggest(); renderHome(); updateControls(); renderPlan(); }
+function reset(){ state.sel = null; state.copied = null; if (state.pick) { state.pick = null; touchCfg(); } save(); markDirty(); }
+
+/* ---- poloha ---- */
+async function geocode(q){
+  const msgEl = $('#locmsg'); msgEl.textContent = 'Hledám adresu…';
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cz&accept-language=cs&q=' + encodeURIComponent(q));
+    const j = await r.json();
+    if (!j.length) { msgEl.textContent = 'Adresu jsme nenašli. Zkuste ji napsat jinak, třeba „Hlavní 12, Říčany“.'; return; }
+    state.home = {lat:+j[0].lat, lon:+j[0].lon, label:j[0].display_name.split(',').slice(0,3).join(',')};
+    msgEl.textContent = ''; touchCfg(); reset(); renderAll();
+  } catch(e){ msgEl.textContent = 'Vyhledání adresy se nepovedlo. Zkontrolujte připojení.'; }
+}
+function useGps(){
+  const msgEl = $('#locmsg');
+  if (!navigator.geolocation) { msgEl.textContent = 'Tento prohlížeč polohu neumí. Zadejte adresu.'; return; }
+  msgEl.textContent = 'Zjišťuji polohu…';
+  navigator.geolocation.getCurrentPosition(p => {
+    state.home = {lat:p.coords.latitude, lon:p.coords.longitude, label:'Vaše aktuální poloha'};
+    msgEl.textContent = ''; touchCfg(); reset(); renderAll();
+  }, () => { msgEl.textContent = 'Polohu se nepodařilo zjistit. Zadejte prosím adresu.'; }, {timeout:15000});
+}
+
+/* ---- události ---- */
+function addTerm(){
+  const t = state.q.trim(); if (!t) return;
+  const ex = state.basket.find(b => bk(b.term, bcat(b)) === bk(t, state.cat)), now = Date.now();
+  delete state.tomb[bk(t, state.cat)];
+  if (ex) { ex.qty++; ex.t = now; } else { const nb = {term:t, qty:1, t:now, o:now}; if (state.cat === 'drug') nb.cat = 'drug'; state.basket.push(nb); }
+  state.q = ''; $('#q').value = ''; reset(); renderAll();
+}
+function addPicked(){
+  const all = activeItems(), now = Date.now(); let n = 0;
+  state.sug.forEach(id => {
+    const it = all.find(x => x.id === id); if (!it) return;
+    const term = it.title.replace(/\s+/g,' ').trim(), k = bk(term, state.cat);
+    delete state.tomb[k];
+    const ex = state.basket.find(b => bk(b.term, bcat(b)) === k);
+    if (ex) { ex.qty++; ex.t = now; } else { const nb = {term, qty:1, t:now, o:now + n}; if (state.cat === 'drug') nb.cat = 'drug'; state.basket.push(nb); }
+    n++;
+  });
+  state.sug = new Set(); state.q = ''; $('#q').value = ''; reset(); renderAll();
+  if (n) toast('Přidáno do seznamu: ' + n + NBSP + plural(n) + '.');
+}
+function bind(){
+  $('#addform').addEventListener('submit', e => { e.preventDefault(); state.q = $('#q').value; renderSuggest(); });
+  $('#q').addEventListener('input', e => { state.q = e.target.value; renderSuggest(); });
+  $('#locform').addEventListener('submit', e => { e.preventDefault(); const v = $('#addr').value.trim(); if (v) geocode(v); });
+  document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.act === 'sort') { state.sort = t.value; save(); renderSuggest(); } });
+  document.addEventListener('toggle', e => { if (e.target && e.target.classList && e.target.classList.contains('relbox')) state.relOpen = e.target.open; }, true);
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const a = b.dataset.act, v = b.dataset.v, i = +b.dataset.i;
+    if (a === 'chain') {
+      if (!v) state.chs[state.cat] = [];
+      else { const l = state.chs[state.cat] || [], k = l.indexOf(v); if (k >= 0) l.splice(k, 1); else l.push(v); state.chs[state.cat] = l; }
+      reset(); return renderAll();
+    }
+    if (a === 'addterm') return addTerm();
+    if (a === 'addpicked') return addPicked();
+    if (a === 'sugpick') { if (b.checked) state.sug.add(b.dataset.id); else state.sug.delete(b.dataset.id); return renderSuggest(); }
+    if (a === 'inc') { state.basket[i].qty++; state.basket[i].t = Date.now(); reset(); renderAll(); }
+    else if (a === 'dec') { state.basket[i].qty = Math.max(1, state.basket[i].qty-1); state.basket[i].t = Date.now(); reset(); renderAll(); }
+    else if (a === 'grp') { state.basket[i].grp = v; state.basket[i].t = Date.now(); reset(); renderAll(); }
+    else if (a === 'rm') { state.tomb[bk(state.basket[i].term, bcat(state.basket[i]))] = Date.now(); state.basket.splice(i,1); reset(); renderAll(); }
+    else if (a === 'gps') useGps();
+    else if (a === 'mode') { state.mode = v; touchCfg(); reset(); renderAll(); }
+    else if (a === 'max') { state.max = +v; touchCfg(); reset(); renderAll(); }
+    else if (a === 'cat') { if (v !== state.cat) { state.cat = v; state.sug = new Set(); state.q = ''; const qi = $('#q'); if (qi) qi.value = ''; reset(); renderAll(); } }
+    else if (a === 'fmt') { state.fmt = v; touchCfg(); reset(); renderAll(); }
+    else if (a === 'size') { state.size = v; save(); updateControls(); }
+    else if (a === 'cards') { state.cards = !state.cards; touchCfg(); reset(); renderAll(); }
+    else if (a === 'cardson') { state.cards = true; touchCfg(); reset(); renderAll(); }
+    else if (a === 'opt') { state.sel = state.pick = b.dataset.key; touchCfg(); save(); markDirty(); renderPlan(); }
+    else if (a === 'rec') { state.sel = state.pick = null; touchCfg(); save(); markDirty(); renderPlan(); }
+    else if (a === 'print') window.print();
+    else if (a === 'undone') { Object.keys(state.doneMap).forEach(k => { if (state.doneMap[k].v) setDone(k, false); }); renderPlan(); }
+    else if (a === 'finish') finishShopping();
+    else if (a === 'clearplan') clearPlan();
+    else if (a === 'lasttoggle') { state.lastOpen = !state.lastOpen; renderLast(); }
+    else if (a === 'lastdel') lastDelete(i);
+    else if (a === 'lastadd') lastAdd();
+    else if (a === 'tab') setTab(v);
+    else if (a === 'logout') logout();
+    else if (a === 'copylink') copyLink();
+    else if (a === 'nativeshare') nativeShare();
+    else if (a === 'newlist') newList();
+    else if (a === 'copy') {
+      const t = state.copyText;
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { state.copied = 'ok'; renderPlan(); }, () => { state.copied = 'fail'; renderPlan(); });
+    }
+  });
+  document.addEventListener('change', e => {
+    const lt = e.target.closest('input[data-lt]');
+    if (lt) { const x = state.last && state.last.items[+lt.dataset.lt]; if (x) { const k = norm(x.term); lt.checked ? state.lastOff.delete(k) : state.lastOff.add(k); } return; }
+    const c = e.target.closest('input[data-pid]'); if (!c) return;
+    setDone(c.dataset.pid, c.checked);
+    c.closest('.item').classList.toggle('done', c.checked);
+  });
+}
+
+/* ---- komunikace se serverem ---- */
+async function call(url, body){
+  const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), body !== undefined
+    ? {method:'POST', headers:{'Content-Type':'application/json', 'X-Requested-With':'nsr'}, body:JSON.stringify(body), cache:'no-store'}
+    : {cache:'no-store'});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.message || j.error || ('HTTP ' + r.status)), {status:r.status, j});
+  return j;
+}
+const authApi = (a, body) => call('api/auth.php?a=' + a, body);
+const listApi = (a, body, code) => call('api/list.php?a=' + a + ((code || SHARE.code) ? '&code=' + (code || SHARE.code) : ''), body);
+const AUTH = {user:null};
+const SHARE = {code:null, rev:null, dirty:false, ver:0, busy:false, status:'', deb:null, timer:null, copied:false};
+
+/* ---- slučování se serverem ---- */
+function setDone(k, v){ state.doneMap[k] = {v:!!v, t:Date.now()}; v ? state.done.add(k) : state.done.delete(k); save(); markDirty(); }
+function toDoc(){
+  const items = {};
+  state.basket.forEach(b => { items[bk(b.term, bcat(b))] = {term:b.term, qty:b.qty, grp:b.grp || null, cat:b.cat === 'drug' ? 'drug' : null, t:b.t || 1, o:b.o || 1}; });
+  Object.keys(state.tomb).forEach(k => { const t = state.tomb[k]; if (!items[k] || items[k].t < t) items[k] = {term:k, qty:1, grp:null, t, o:0, del:true}; });
+  return {items, done:Object.assign({}, state.doneMap), cfg:{t:state.cfgT || 0, v:{home:state.home, mode:state.mode, rad:state.rad, max:state.max, cards:state.cards, fmt:state.fmt, pick:state.pick}}, last:{t:state.lastT || 0, v:state.last}};
+}
+function applyDoc(remote){
+  const doc = mergeDocs(toDoc(), remote);
+  const live = Object.keys(doc.items).filter(k => !doc.items[k].del).sort((x, y) => (doc.items[x].o - doc.items[y].o) || (x < y ? -1 : 1));
+  state.basket = live.map(k => { const v = doc.items[k], b = {term:v.term, qty:v.qty, t:v.t, o:v.o}; if (v.grp) b.grp = v.grp; if (v.cat === 'drug' || k.startsWith('d~')) b.cat = 'drug'; return b; });
+  state.tomb = {}; Object.keys(doc.items).forEach(k => { if (doc.items[k].del) state.tomb[k] = doc.items[k].t; });
+  state.doneMap = doc.done || {};
+  state.done = new Set(Object.keys(state.doneMap).filter(k => state.doneMap[k].v));
+  if (doc.cfg && doc.cfg.v) {
+    const v = doc.cfg.v; state.cfgT = doc.cfg.t || 0;
+    state.home = v.home || null; state.mode = v.mode || 'car'; state.rad = Object.assign({foot:3000,bus:6000,car:30000}, v.rad || {}); state.max = v.max || 2; state.cards = !!v.cards; state.fmt = v.fmt || 'all'; state.pick = v.pick || null;
+  }
+  if (doc.last) { state.lastT = doc.last.t || 0; state.last = doc.last.v && doc.last.v.items && doc.last.v.items.length ? doc.last.v : null; }
+  state.sel = state.pick;
+}
+function markDirty(){
+  if (!SHARE.code) return;
+  SHARE.dirty = true; SHARE.ver++;
+  clearTimeout(SHARE.deb); SHARE.deb = setTimeout(() => syncNow(), 600);
+  renderSyncStatus();
+}
+function renderSyncStatus(){
+  const el = $('#syncst'); if (!el) return;
+  el.className = 'syn' + (SHARE.status === 'err' ? ' bad' : '');
+  el.textContent = SHARE.status === 'err' ? 'Bez spojení. Změny se odešlou, jakmile bude signál.' : (SHARE.dirty || SHARE.busy ? 'Odesílám…' : (SHARE.status === 'ok' ? '✓ Synchronizováno' : ''));
+}
+async function syncNow(force){
+  if (!SHARE.code || SHARE.busy || !AUTH.user) return;
+  SHARE.busy = true; const v0 = SHARE.ver; renderSyncStatus();
+  try {
+    const r = (SHARE.dirty || force || SHARE.rev == null)
+      ? await listApi('sync', {doc:toDoc()})
+      : await call('api/list.php?a=get&code=' + SHARE.code + '&rev=' + SHARE.rev);
+    if (!r.same) {
+      const before = JSON.stringify(toDoc());
+      applyDoc(r.doc);
+      if (JSON.stringify(toDoc()) !== before) { save(); renderAll(); }
+    }
+    SHARE.rev = r.rev;
+    if (SHARE.ver === v0) SHARE.dirty = false;
+    SHARE.status = 'ok';
+  } catch(e) {
+    if (e.status === 401) { sessionLost(); return; }
+    if (e.status === 403 || e.status === 404) { SHARE.status = 'err'; await recoverList(); }
+    else SHARE.status = 'err';
+  } finally { SHARE.busy = false; renderSyncStatus(); }
+}
+async function recoverList(){
+  // seznam na serveru zmizel (nebo ho účet už nemá): založíme nový z toho, co máme
+  try { const r = await listApi('create', {doc:toDoc()}, ''); AUTH.user.list_code = r.code; SHARE.code = r.code; SHARE.rev = r.rev; SHARE.status = 'ok'; renderShare(); } catch(e){}
+}
+function startTimers(){
+  if (SHARE.timer) return;
+  SHARE.timer = setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 7000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); });
+  window.addEventListener('online', () => syncNow(true));
+}
+function stopSync(){ clearTimeout(SHARE.deb); SHARE.code = null; SHARE.rev = null; SHARE.dirty = false; SHARE.status = ''; }
+
+async function joinList(code, keepLocal){
+  const r = await listApi('join', {}, code);
+  AUTH.user.list_code = r.code; SHARE.code = r.code; SHARE.rev = null;
+  if (!keepLocal) { state.basket = []; state.tomb = {}; state.doneMap = {}; state.done = new Set(); state.cfgT = 0; state.pick = null; state.last = null; state.lastT = 0; }
+  applyDoc(r.doc); state.sel = state.pick; save(); persistUser();
+  await syncNow(true); renderAll(); renderShare();
+}
+async function newList(){
+  try { const r = await listApi('create', {doc:toDoc()}, ''); AUTH.user.list_code = r.code; SHARE.code = r.code; SHARE.rev = r.rev; applyDoc(r.doc); save(); persistUser(); renderAll(); renderShare(); toast('Máte vlastní seznam. Položky zůstaly.'); }
+  catch(e){ toast('Seznam se nepodařilo oddělit. Zkuste to prosím znovu.'); }
+}
+function persistUser(){ try { localStorage.setItem('nsr_user', JSON.stringify(AUTH.user)); } catch(e){} }
+function toast(t){
+  const old = $('#toast'); if (old) old.remove();
+  $('#acct').insertAdjacentHTML('beforebegin', '<p class="toast" id="toast" role="status">' + esc(t) + '</p>');
+  setTimeout(() => { const x = $('#toast'); if (x) x.remove(); }, 10000);
+}
+
+/* ---- sdílení ---- */
+const codeFmt = c => c ? c.slice(0, 4) + '-' + c.slice(4) : '';
+const listLink = () => location.origin + '/#s=' + AUTH.user.list_code;
+function shareText(){
+  const lines = state.basket.map(b => '• ' + b.term + (b.qty > 1 ? ' × ' + b.qty : ''));
+  return 'Sdílím s tebou náš nákupní seznam v aplikaci Nákup s rozumem:\n' + (lines.join('\n') || '(zatím prázdný)') + '\n\nOtevři odkaz, přihlas se (nebo si vytvoř účet) a uvidíš akce i trasu:\n' + listLink();
+}
+function renderShare(){
+  const el = $('#sharebox'); if (!AUTH.user || !AUTH.user.list_code) { el.innerHTML = ''; return; }
+  el.innerHTML = `<h3>Společný seznam</h3>
+    <p class="help" style="margin-top:0">Seznam se ukládá k vašemu účtu, uvidíte ho na každém telefonu. Chcete nakupovat společně? Pošlete odkaz partnerovi. Oba pak vidíte stejné položky, plán i odškrtnuté věci a změny se přenášejí hned.</p>
+    <div class="row"><button type="button" class="btn wa" data-act="wa">Poslat přes WhatsApp</button>${navigator.share ? '<button type="button" class="btn" data-act="nativeshare">Sdílet jinak…</button>' : ''}<button type="button" class="btn" data-act="copylink">${SHARE.copied ? 'Odkaz zkopírován' : 'Zkopírovat odkaz'}</button></div>
+    <p class="help">Kód seznamu: <span class="code">${codeFmt(AUTH.user.list_code)}</span>. Odkaz posílejte jen tomu, s kým chcete seznam sdílet. <span class="syn" id="syncst"></span></p>
+    <details><summary>Mám kód nebo odkaz od partnera</summary>
+      <form id="joinform" class="joinrow" autocomplete="off"><input type="text" id="j-code" placeholder="např. k7m2-xq9d" aria-label="Kód společného seznamu" autocapitalize="none" spellcheck="false"><button type="submit">Připojit</button></form>
+      <p class="help">Připojením nahradíte svůj seznam seznamem partnera.</p><p class="err" id="j-err" role="alert"></p>
+      <button type="button" class="linkbtn" data-act="newlist">Přestat sdílet a mít vlastní seznam</button>
+    </details>`;
+  renderSyncStatus();
+}
+function copyLink(){
+  const t = listLink();
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { SHARE.copied = true; renderShare(); setTimeout(() => { SHARE.copied = false; renderShare(); }, 2500); }, () => { window.prompt('Zkopírujte odkaz:', t); });
+}
+const APP_URL = 'https://app.nakupsrozumem.cz/';
+const APP_TEXT = 'Zkus aplikaci Nákup s rozumem: najde akční ceny v obchodech kolem tebe a naplánuje, kam jít nakoupit. ' + APP_URL;
+function appShare(v){
+  const t = encodeURIComponent(APP_TEXT);
+  if (v === 'wa') window.open('https://wa.me/?text=' + t, '_blank', 'noopener');
+  else if (v === 'sms') location.href = 'sms:?&body=' + t;
+  else if (v === 'mail') location.href = 'mailto:?subject=' + encodeURIComponent('Nákup s rozumem') + '&body=' + t;
+  else if (v === 'native' && navigator.share) navigator.share({title:'Nákup s rozumem', text:APP_TEXT, url:APP_URL}).catch(() => {});
+}
+function nativeShare(){ if (navigator.share) navigator.share({title:'Nákup s rozumem', text:shareText()}).catch(() => {}); }
+
+/* ---- účet a úvodní stránka ---- */
+let TAB = 'login';
+function setTab(t){
+  TAB = t;
+  document.querySelectorAll('[data-act="tab"]').forEach(b => b.setAttribute('aria-selected', b.dataset.v === t));
+  $('#a-go').textContent = t === 'login' ? 'Přihlásit se' : 'Vytvořit účet zdarma';
+  $('#a-pass').autocomplete = t === 'login' ? 'current-password' : 'new-password';
+  $('#a-hint').textContent = t === 'login' ? '' : '(aspoň 8 znaků)';
+  $('#a-fine').textContent = t === 'login' ? 'Přihlášení si tento telefon zapamatuje, příště zadáváte jen heslo.' : 'Stačí e-mail a heslo. Hned po vytvoření účtu můžete začít.';
+  $('#a-err').textContent = '';
+}
+function showLanding(msg){
+  stopSync(); AUTH.user = null;
+  $('#appwrap').hidden = true; $('#landing').hidden = false;
+  let em = ''; try { em = localStorage.getItem('nsr_email') || ''; } catch(e){}
+  $('#a-email').value = em; $('#a-pass').value = '';
+  setTab(em ? 'login' : 'register');
+  $('#a-err').textContent = msg || '';
+  /* po otevření vždy úplně nahoře; k přihlášení se posune jen tehdy, když je tam zpráva (např. vypršelo přihlášení) */
+  try { window.scrollTo(0,0); document.documentElement.scrollTop = 0; } catch(e){}
+  if (msg) { try { $('#a-err').scrollIntoView({block:'center'}); } catch(e){} }
+}
+function sessionLost(){ showLanding('Přihlášení vypršelo. Přihlaste se prosím znovu.'); }
+function openContact(){
+  const d = $('#contactdlg'); if (!d || typeof d.showModal !== 'function') { location.href = 'mailto:vojtechknize@gmail.com?subject=' + encodeURIComponent('Nákup s rozumem'); return; }
+  let em = AUTH.user && AUTH.user.email || '';
+  if (!em) { try { em = localStorage.getItem('nsr_email') || ''; } catch(x){} }
+  if (!$('#c-email').value) $('#c-email').value = em;
+  $('#c-err').textContent = ''; d.showModal(); ($('#c-email').value ? $('#c-msg') : $('#c-email')).focus();
+}
+function renderAcct(){
+  const u = AUTH.user; if (!u) { $('#acct').innerHTML = ''; return; }
+  $('#acct').innerHTML = `<span class="who">Přihlášeno: <b>${esc(u.email)}</b></span><span class="acts">${u.admin ? '<a href="admin/">Správa</a>' : ''}<button type="button" class="linkbtn" data-act="contact">Napište nám</button><button type="button" class="linkbtn" data-act="logout">Odhlásit se</button></span>
+    <details><summary>Správa účtu</summary><form id="delform"><label for="d-pass">Smazání účtu odstraní váš přístup. Pro potvrzení zadejte heslo.</label><input id="d-pass" type="password" autocomplete="current-password"><p class="err" id="d-err" role="alert"></p><button type="submit" class="btn">Smazat účet navždy</button></form></details>`;
+}
+async function logout(){
+  try { await authApi('logout', {}); } catch(e){}
+  resetLocal(); try { localStorage.removeItem('nsr_uid'); localStorage.removeItem('nsr_user'); sessionStorage.removeItem('nsr_alive'); } catch(e){}
+  showLanding();
+}
+let dataLoaded = false, DATA_DRUG = {items:[], updated:null, sources:{}};
+async function loadData(){
+  if (dataLoaded) return; dataLoaded = true;
+  const get1 = u => fetch(u + '?v=' + Date.now()).then(r => r.ok ? r.json() : Promise.reject(r.status));
+  const get = async u => { for (let i = 0; i < 3; i++) { try { return await get1(u); } catch(e) { if (i === 2) throw e; await new Promise(r => setTimeout(r, 1500 * (i + 1))); } } };
+  try { DATA = await get('data.json'); } catch(e){ DATA = {items:[], updated:null, sources:{}}; $('#datanote').textContent = 'Akce se zatím nepodařilo načíst. Data se stahují jednou denně.'; dataLoaded = false; }
+  try { STORES_ALL = (await get('stores.json')).stores || []; } catch(e){ STORES_ALL = []; }
+  try { DATA_DRUG = await get('data_drug.json'); } catch(e){ DATA_DRUG = {items:[], updated:null, sources:{}}; }
+  renderAll();
+  try { fetch('cron/auto.php', {cache:'no-store'}).catch(()=>{}); } catch(e){}   // server si sám obnoví data, když jsou stará
+}
+async function startSync(){
+  let join = null; try { join = localStorage.getItem('nsr_join'); localStorage.removeItem('nsr_join'); } catch(e){}
+  if (join && join !== AUTH.user.list_code) {
+    try { await joinList(join, !AUTH.user.list_code); toast('Připojili jste se ke společnému seznamu.'); }
+    catch(e){ if (!e.status) throw e; toast('Odkaz na společný seznam už neplatí. Požádejte partnera o nový.'); }
+  }
+  if (!AUTH.user.list_code) {
+    const r = await listApi('create', {doc:toDoc()}, '');
+    AUTH.user.list_code = r.code; SHARE.code = r.code; SHARE.rev = r.rev; applyDoc(r.doc); save(); persistUser();
+  }
+  SHARE.code = AUTH.user.list_code;
+  renderShare(); startTimers();
+  await syncNow(true);
+}
+async function enterApp(user){
+  AUTH.user = user; SHARE.code = user.list_code || null; SHARE.rev = null;
+  try { sessionStorage.setItem('nsr_alive', '1'); } catch(e){}
+  persistUser();
+  let owner = null; try { owner = localStorage.getItem('nsr_uid'); } catch(e){}
+  if (owner && owner !== String(user.id)) resetLocal();
+  try { localStorage.setItem('nsr_uid', String(user.id)); } catch(e){}
+  load();
+  $('#landing').hidden = true; $('#appwrap').hidden = false;
+  renderAcct(); renderAll(); renderShare(); loadData();
+  try { const nb = document.getElementById('appshare-native'); if (nb && navigator.share) nb.hidden = false; } catch(e){}
+  try { window.scrollTo(0,0); document.documentElement.scrollTop = 0; } catch(e){}
+  try { await startSync(); } catch(e){ if (e.status === 401) sessionLost(); else { SHARE.status = 'err'; if (SHARE.code) startTimers(); renderSyncStatus(); } }
+}
+function bindAuth(){
+  $('#a-show').addEventListener('change', e => { $('#a-pass').type = e.target.checked ? 'text' : 'password'; });
+  document.addEventListener('submit', async e => {
+    const f = e.target;
+    if (f.id === 'authform') {
+      e.preventDefault();
+      const email = $('#a-email').value.trim(), password = $('#a-pass').value, err = $('#a-err'), go = $('#a-go');
+      err.textContent = '';
+      if (!email || !password) { err.textContent = 'Vyplňte prosím e-mail i heslo.'; return; }
+      go.disabled = true;
+      try {
+        const r = await authApi(TAB, {email, password});
+        try { localStorage.setItem('nsr_email', email); } catch(x){}
+        $('#a-pass').value = ''; $('#a-show').checked = false; $('#a-pass').type = 'password';
+        await enterApp(r.user);
+      } catch(x) { err.textContent = x.status ? x.message : 'Nepodařilo se spojit se serverem. Zkontrolujte připojení.'; }
+      go.disabled = false;
+    } else if (f.id === 'joinform') {
+      e.preventDefault();
+      const raw = $('#j-code').value.trim(), m = raw.match(/s=([2-9a-z]{8})/i), code = (m ? m[1] : raw.toLowerCase().replace(/[^2-9a-z]/g, '')).toLowerCase();
+      const err = $('#j-err'); err.textContent = '';
+      if (!/^[2-9a-hj-km-np-z]{8}$/.test(code)) { err.textContent = 'Kód má 8 znaků, například k7m2-xq9d.'; return; }
+      try { await joinList(code, false); toast('Připojili jste se ke společnému seznamu.'); }
+      catch(x) { err.textContent = x.status === 404 ? 'Seznam s tímto kódem neexistuje.' : 'Připojení se nepovedlo. Zkuste to prosím znovu.'; }
+    } else if (f.id === 'contactform') {
+      e.preventDefault();
+      const err = $('#c-err'), go = $('#c-go'); err.textContent = '';
+      const email = $('#c-email').value.trim(), message = $('#c-msg').value.trim();
+      if (!email) { err.textContent = 'Zadejte prosím svůj e-mail, ať vám můžeme odpovědět.'; $('#c-email').focus(); return; }
+      if (message.length < 5) { err.textContent = 'Napište prosím, s čím vám můžeme pomoci.'; $('#c-msg').focus(); return; }
+      go.disabled = true; go.textContent = 'Odesílám…';
+      try { await call('api/contact.php', {email, message, web:$('#c-web').value}); $('#c-msg').value = ''; if ($('#appwrap').hidden) { err.textContent = 'Děkujeme, zpráva je odeslaná. Ozveme se vám e-mailem.'; } else { $('#contactdlg').close(); toast('Děkujeme, zpráva je odeslaná. Ozveme se vám e-mailem.'); } }
+      catch(x) { err.textContent = x.status ? x.message : 'Nepodařilo se spojit se serverem. Zkuste to prosím znovu.'; }
+      go.disabled = false; go.textContent = 'Odeslat';
+    } else if (f.id === 'delform') {
+      e.preventDefault();
+      const err = $('#d-err'); err.textContent = '';
+      try { await authApi('delete', {password:$('#d-pass').value}); resetLocal(); try { localStorage.removeItem('nsr_uid'); localStorage.removeItem('nsr_user'); localStorage.removeItem('nsr_email'); } catch(x){} showLanding('Účet byl smazán.'); }
+      catch(x) { err.textContent = x.status ? x.message : 'Nepodařilo se spojit se serverem.'; }
+    }
+  });
+  document.addEventListener('change', e => { const r = e.target.closest && e.target.closest('select[data-rad]'); if (r) { state.rad[r.dataset.rad] = +r.value; touchCfg(); reset(); renderAll(); } });
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-act="contact"]')) { openContact(); return; }
+    if (e.target.closest('[data-act="contact-close"]')) { $('#contactdlg').close(); return; }
+    const as = e.target.closest('[data-act="appshare"]'); if (as) { appShare(as.dataset.v); return; } if (e.target.closest('[data-act="wa"]')) window.open('https://wa.me/?text=' + encodeURIComponent(shareText()), '_blank', 'noopener'); });
+}
+
+async function boot(){
+  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch(e){}
+  burstSvg(); bind(); bindAuth();
+  const takeHash = () => {
+    const m = location.hash.match(/s=([2-9a-z]{8})/i);
+    if (m) { try { localStorage.setItem('nsr_join', m[1].toLowerCase()); } catch(e){} history.replaceState(null, '', location.pathname + location.search); }
+    return !!m;
+  };
+  takeHash();
+  window.addEventListener('hashchange', () => { if (takeHash() && AUTH.user) startSync().catch(() => {}); });
+  // po zavření aplikace (nová relace prohlížeče) se uživatel odhlásí a uvidí přihlašovací obrazovku
+  let alive = false; try { alive = sessionStorage.getItem('nsr_alive') === '1'; } catch(e){}
+  if (!alive) { try { await authApi('logout', {}); } catch(e){} try { localStorage.removeItem('nsr_user'); } catch(e){} showLanding(); return; }
+  try { const r = await authApi('me'); await enterApp(r.user); }
+  catch(e) {
+    let stored = null; try { stored = JSON.parse(localStorage.getItem('nsr_user') || 'null'); } catch(x){}
+    if (e.status === 401 || !stored) showLanding();
+    else { enterApp(stored); }          // bez spojení: ukážeme poslední uložený seznam
+  }
+}
+/*UI-END*/
+
+boot();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

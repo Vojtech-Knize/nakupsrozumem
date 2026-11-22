@@ -1,0 +1,22 @@
+{
+ "version": "2026-11-22 08:37",
+ "files": {
+  "index.html": "a5edb5e22f0be764440192c18eff4e82b3155648081ba7aa0a5f3196b91b6b67",
+  "sw.js": "38cd19a6bcce0de3bfc3feac4a66abf3e4b78d3c82921dea331a26a15079c929",
+  "manifest.webmanifest": "616fd2e9b316da7bdf52a8f1b9cefc5a20075c32ba8f0cad32d1923dc0f88fae",
+  "icon-192.png": "c80bc12c89479d13d8e9bf4b0096d7b9b8ad5c3634cd16949da1a52dba84f086",
+  "icon-512.png": "7a743598cc376257a85f06943a6b7275ca199e289640a11c75320acac9b6d256",
+  "icon-maskable-512.png": "e8f163f5df8dd5c22a5f28499b97e2d4135833bf30eeaa2bee595a4f84f04116",
+  "apple-touch-icon.png": "082560e97aec3c43b174342d1581d4e56435d7dc749b44fcc2d06532725ca506",
+  "admin/index.html": "132ac4083ee5cab38e48f93143e58196170bd8ba7c3d1a27e6bf55ac54218336",
+  "api/_lib.php": "e2b5d5123a37b9bf8ba50aac25a2d08f1d23e27bfa79473c9eb8077c959b35a0",
+  "api/auth.php": "b9327f6e12ed261d30d475eaced703192aa7cfca6a3290d72ed2486d27b46f12",
+  "api/admin.php": "7cc33709ed77327c21317012a36b2fc430335af48081d65e09b7bc2f764ef4ca",
+  "api/contact.php": "cbac057d1a312fcad0487f5feff23d51c85b2ee3b48ad06bc063ce147c227f4b",
+  "api/list.php": "25c7d4f1b6fd1a159abba78450bd3b53bf4eb568e2efcd97c0796354c0dd5a86",
+  "cron/auto.php": "e25f9ada196748915b3b82c09eae17c1cd14fa8c8f804c035e59e65ac941a068",
+  "cron/fetch_akce.php": "c7838bf8ee27c4640f9f5ba7f31a6db41eb8bc80d6bdefb3fa1c0dab44604771",
+  "cron/fetch_drug.php": "f445254805f7d1a9b0eb40c149c0c402aca64d033e55471a84e3de37e95a0dd8",
+  "cron/fetch_stores.php": "60e080773a95bf60613bf65854b8ad22f22bfe47c0ba9981418dfb520570d4fc"
+ }
+}

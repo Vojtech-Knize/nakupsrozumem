@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#1f2933">
+<title>Správa · Nákup s rozumem</title>
+<link rel="icon" href="../icon-192.png">
+<style>
+:root{--ink:#1f2933;--muted:#5f6c7b;--line:#e1e5ea;--bg:#f4f1ea;--card:#fff;--accent:#d9262c;--teal:#0f7b8a;--gold:#f2b705}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--ink);color:#fff;padding:.9rem 1.1rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+header h1{margin:0;font-size:1.15rem}
+header a{color:#fff;text-decoration:none;border:1px solid #fff6;border-radius:8px;padding:.35rem .8rem;font-size:.95rem}
+main{max-width:1100px;margin:0 auto;padding:1rem}
+.grid{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.kpi,.card{background:var(--card);border-radius:14px;padding:.9rem 1rem;box-shadow:0 1px 2px #0001}
+.kpi b{display:block;font-size:2rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:.9rem}
+h2{font-size:1.05rem;margin:0 0 .6rem}
+.cols{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-top:.8rem}
+svg{width:100%;height:auto;display:block}
+svg text{font:11px system-ui,sans-serif;fill:#5f6c7b}
+.legend{display:flex;gap:1rem;font-size:.85rem;color:var(--muted);margin:.2rem 0 0}
+.legend i{display:inline-block;width:.8rem;height:.8rem;border-radius:3px;margin-right:.3rem;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:.93rem}
+th,td{text-align:left;padding:.45rem .4rem;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:.82rem}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+button{font:inherit;font-size:.85rem;border:1px solid var(--line);background:#fff;border-radius:8px;padding:.3rem .6rem;cursor:pointer}
+button.danger{color:var(--accent);border-color:#d9262c55}
+.tag{display:inline-block;font-size:.75rem;border-radius:999px;padding:.05rem .5rem;background:#e6f3f5;color:var(--teal);font-weight:600}
+.tag.warn{background:#fdeaea;color:var(--accent)}
+.msg{padding:2rem 1rem;text-align:center}
+.msg a{color:var(--teal)}
+input.s{font:inherit;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem;width:100%;max-width:280px;margin-bottom:.6rem}
+.pw{background:#fff8dc;border:1px solid var(--gold);border-radius:10px;padding:.6rem .8rem;margin-bottom:.6rem}
+.pw code{font-size:1.1rem;font-weight:700;user-select:all}
+</style>
+</head>
+<body>
+<header><h1>Nákup s rozumem · Správa</h1><a href="../">← Zpět do aplikace</a></header>
+<main id="main"><p class="msg">Načítám…</p></main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const NAME = {kaufland:'Kaufland', penny:'Penny', lidl:'Lidl', billa:'Billa', globus:'Globus', tesco:'Tesco', albert:'Albert', norma:'Norma', coop:'Coop', terno:'Terno'};
+const cs = n => Number(n).toLocaleString('cs-CZ');
+const dt = t => t ? new Date(t * 1000).toLocaleString('cs-CZ', {day:'numeric', month:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '–';
+const dshort = d => { const [y, m, dd] = d.split('-'); return +dd + '. ' + +m + '.'; };
+async function api(a, body) {
+  const r = await fetch('../api/admin.php?a=' + a + '&_=' + Date.now(), body ? {method:'POST', headers:{'Content-Type':'application/json', 'X-Requested-With':'nsr'}, body:JSON.stringify(body), cache:'no-store'} : {cache:'no-store'});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.message || j.error || r.status), {status:r.status, j});
+  return j;
+}
+
+/* ---- grafy (čisté SVG) ---- */
+function niceMax(v) { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; }
+function frame(W, H, m, max, labels) {
+  const iw = W - m.l - m.r, ih = H - m.t - m.b; let g = '';
+  for (let i = 0; i <= 4; i++) { const y = m.t + ih - ih * i / 4; g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="#e1e5ea"/><text x="${m.l - 6}" y="${y + 4}" text-anchor="end">${cs(Math.round(max * i / 4))}</text>`; }
+  const n = labels.length, step = Math.ceil(n / 6);
+  labels.forEach((l, i) => { if (i % step === 0 || i === n - 1) g += `<text x="${m.l + iw * (n === 1 ? .5 : i / (n - 1))}" y="${H - 8}" text-anchor="middle">${esc(l)}</text>`; });
+  return {g, iw, ih};
+}
+function lineChart(labels, series, opt = {}) {
+  const W = 520, H = 220, m = {l:34, r:12, t:10, b:26};
+  const max = niceMax(Math.max(1, ...series.flatMap(s => s.v)));
+  const f = frame(W, H, m, max, labels); let g = f.g; const n = labels.length;
+  const X = i => m.l + f.iw * (n === 1 ? .5 : i / (n - 1)), Y = v => m.t + f.ih - f.ih * v / max;
+  series.forEach(s => {
+    const pts = s.v.map((v, i) => X(i).toFixed(1) + ',' + Y(v).toFixed(1)).join(' ');
+    if (s.area) g += `<polygon points="${X(0)},${m.t + f.ih} ${pts} ${X(n - 1)},${m.t + f.ih}" fill="${s.color}" opacity=".12"/>`;
+    g += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = s.v.length - 1; g += `<circle cx="${X(last)}" cy="${Y(s.v[last])}" r="4" fill="${s.color}"/><text x="${X(last) - 6}" y="${Y(s.v[last]) - 8}" text-anchor="end" style="fill:${s.color};font-weight:700">${cs(s.v[last])}</text>`;
+  });
+  g += labels.map((l, i) => `<rect x="${X(i) - f.iw / n / 2}" y="${m.t}" width="${f.iw / n}" height="${f.ih}" fill="transparent"><title>${esc(l)}: ${series.map(s => s.name + ' ' + cs(s.v[i])).join(', ')}</title></rect>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.label || '')}">${g}</svg><div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>`;
+}
+function barChart(labels, vals, color, opt = {}) {
+  const W = 520, H = 220, m = {l:34, r:12, t:10, b:26};
+  const max = niceMax(Math.max(1, ...vals)); const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  let g = ''; for (let i = 0; i <= 4; i++) { const y = m.t + ih - ih * i / 4; g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="#e1e5ea"/><text x="${m.l - 6}" y="${y + 4}" text-anchor="end">${cs(Math.round(max * i / 4))}</text>`; }
+  const n = vals.length, bw = iw / n;
+  vals.forEach((v, i) => { const h = ih * v / max, x = m.l + i * bw + bw * .15; g += `<rect x="${x.toFixed(1)}" y="${(m.t + ih - h).toFixed(1)}" width="${(bw * .7).toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${Array.isArray(color) ? color[i] : color}"><title>${esc(labels[i])}: ${cs(v)}</title></rect>`;
+    g += `<text x="${(x + bw * .35).toFixed(1)}" y="${(m.t + ih - h - 5).toFixed(1)}" text-anchor="middle" style="font-weight:700;fill:#1f2933">${v ? cs(v) : ''}</text>`; });
+  const step = Math.ceil(n / (opt.maxLabels || 8)); labels.forEach((l, i) => { if (i % step === 0) g += `<text x="${m.l + i * bw + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(l)}</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.label || '')}">${g}</svg>`;
+}
+
+/* ---- stránka ---- */
+let S = null, FILTER = '', NOTE = '';
+function render() {
+  const t = S.totals, ser = S.series, lab = ser.map(s => dshort(s.d));
+  const chains = S.chains.slice().sort((a, b) => b.items - a.items);
+  const CCOL = {kaufland:'#d9262c', penny:'#e2711d', lidl:'#0f5ea8', billa:'#f2b705', globus:'#0f7b8a', albert:'#1f9d55', norma:'#c8102e', coop:'#e30613', terno:'#f39200'};
+  const rows = S.users.filter(u => u.email.toLowerCase().includes(FILTER.toLowerCase())).map(u => `<tr>
+    <td>${esc(u.email)} ${u.admin ? '<span class="tag">admin</span>' : ''} ${u.shared ? '<span class="tag">sdílí seznam</span>' : ''}</td>
+    <td>${dt(u.created)}</td><td>${dt(u.last_seen)}</td>
+    <td style="white-space:nowrap">${u.id === S.me ? '<small>to jste vy</small>' : `<button data-a="pw" data-id="${u.id}">Nové heslo</button> <button data-a="adm" data-id="${u.id}" data-v="${u.admin ? 0 : 1}">${u.admin ? 'Odebrat admina' : 'Udělat adminem'}</button> <button class="danger" data-a="del" data-id="${u.id}" data-e="${esc(u.email)}">Smazat</button>`}</td></tr>`).join('');
+  $('#main').innerHTML = `
+  <div class="grid">
+    <div class="kpi"><b>${cs(t.users)}</b><span>registrovaných uživatelů</span></div>
+    <div class="kpi"><b>${cs(t.new7)}</b><span>nových za 7 dní</span></div>
+    <div class="kpi"><b>${cs(t.new30)}</b><span>nových za 30 dní</span></div>
+    <div class="kpi"><b>${cs(t.active1)}</b><span>aktivních dnes</span></div>
+    <div class="kpi"><b>${cs(t.active7)}</b><span>aktivních za 7 dní</span></div>
+    <div class="kpi"><b>${cs(t.shared_lists)}</b><span>sdílených seznamů</span></div>
+  </div>
+  <div class="cols">
+    <section class="card"><h2>Registrovaní uživatelé v čase</h2>${lineChart(lab, [{name:'Celkem uživatelů', v:ser.map(s => s.total), color:'#0f7b8a', area:true}], {label:'Počet registrovaných uživatelů za posledních 90 dní'})}</section>
+    <section class="card"><h2>Nové registrace za den</h2>${barChart(lab, ser.map(s => s.new), '#d9262c', {label:'Nové registrace za den'})}</section>
+    <section class="card"><h2>Aktivní uživatelé za den</h2>${lineChart(lab, [{name:'Aktivní uživatelé', v:ser.map(s => s.active), color:'#0f5ea8', area:true}], {label:'Aktivní uživatelé za den'})}</section>
+    <section class="card"><h2>Akční nabídky podle řetězců</h2>${chains.length ? barChart(chains.map(c => NAME[c.chain] || c.chain), chains.map(c => c.items), chains.map(c => CCOL[c.chain] || '#5f6c7b'), {label:'Počet akčních nabídek podle řetězců', maxLabels:10}) : '<p>Data zatím nejsou.</p>'}
+      <div class="tw"><table><thead><tr><th>Řetězec</th><th class="num">Nabídek</th><th class="num">Platí dnes</th><th class="num">Prodejen</th><th>Stav</th></tr></thead><tbody>${chains.map(c => `<tr><td>${esc(NAME[c.chain] || c.chain)}</td><td class="num">${cs(c.items)}</td><td class="num">${cs(c.valid)}</td><td class="num">${cs(c.stores)}</td><td>${c.ok === false ? '<span class="tag warn">chyba stahování</span>' : '<span class="tag">v pořádku</span>'}</td></tr>`).join('')}</tbody></table></div>
+      <p class="legend">Data z ${S.data_updated ? new Date(S.data_updated).toLocaleString('cs-CZ') : 'neznámo kdy'}.</p></section>
+  </div>
+  <section class="card" style="margin-top:.8rem"><h2>Uživatelé (${cs(S.users.length)})</h2>
+    ${NOTE ? `<div class="pw">${NOTE}</div>` : ''}
+    <input class="s" id="flt" type="search" placeholder="Hledat podle e-mailu" value="${esc(FILTER)}" aria-label="Hledat uživatele">
+    <div class="tw"><table><thead><tr><th>E-mail</th><th>Registrace</th><th>Naposledy aktivní</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4">Nikdo nenalezen.</td></tr>'}</tbody></table></div>
+  </section>`;
+  const f = $('#flt'); if (f) { f.addEventListener('input', e => { FILTER = e.target.value; const p = e.target.selectionStart; render(); const n = $('#flt'); n.focus(); n.setSelectionRange(p, p); }); }
+}
+async function load() {
+  try { S = await api('stats'); render(); }
+  catch (e) {
+    $('#main').innerHTML = e.status === 401 ? '<p class="msg">Pro správu se nejdřív přihlaste v aplikaci.<br><br><a href="../">Přejít k přihlášení</a></p>'
+      : e.status === 403 ? '<p class="msg">Tento účet nemá oprávnění ke správě.<br><br><a href="../">Zpět do aplikace</a></p>' : '<p class="msg">Správu se nepodařilo načíst. Zkuste to prosím znovu.</p>';
+  }
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const id = +b.dataset.id;
+  try {
+    if (b.dataset.a === 'del') { if (!confirm('Opravdu smazat účet ' + b.dataset.e + '? Nejde to vrátit.')) return; await api('delete_user', {id}); NOTE = ''; }
+    else if (b.dataset.a === 'adm') { await api('set_admin', {id, v:+b.dataset.v}); NOTE = ''; }
+    else if (b.dataset.a === 'pw') { if (!confirm('Vytvořit uživateli dočasné heslo? Stávající heslo přestane platit.')) return; const r = await api('reset_password', {id}); const em = S.users.find(u => u.id === id).email; NOTE = 'Dočasné heslo pro <b>' + esc(em) + '</b>: <code>' + esc(r.password) + '</code><br><small>Předejte ho uživateli. Zobrazuje se jen teď.</small>'; }
+    await load();
+  } catch (er) { alert(er.message); }
+});
+load();
+</script>
+</body>
+</html>
