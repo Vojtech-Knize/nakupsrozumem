@@ -231,6 +231,13 @@ details.more summary{cursor:pointer;font-weight:800;min-height:3rem;display:flex
         <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3.500" fill="#3E9B52"/><circle cx="16.500" cy="9" r="3" fill="#F08A24"/><path d="M1.500 20c.5-4 3-6 6.500-6s6 2 6.500 6z" fill="#3E9B52"/><path d="M14 20c.4-3 2-5 4.500-5s3.800 1.700 4 5z" fill="#F08A24"/></svg></span><span><b>Společný seznam.</b> Jeden z vás vybere zboží, druhý jede nakoupit a vidí, co a kde.</span></li>
       </ul>
     </section>
+    <section class="card installcard" id="installbox" aria-labelledby="h-inst" hidden>
+      <h2 id="h-inst">Aplikace do telefonu</h2>
+      <p class="help" id="inst-lead" style="margin:.2rem 0 .7rem">Přidejte si aplikaci na plochu telefonu, ať ji otevřete jedním klepnutím jako každou jinou aplikaci.</p>
+      <button type="button" class="go" id="inst-go" data-act="install">Nainstalovat aplikaci</button>
+      <div class="inst-steps" id="inst-steps" role="status" hidden></div>
+      <p class="inst-done" id="inst-done" role="status" hidden></p>
+    </section>
     <section class="card authcard" aria-labelledby="h-auth">
       <h2 id="h-auth">Vstup do aplikace</h2>
       <div class="tabs" role="tablist">
@@ -542,6 +549,13 @@ footer .linkbtn,.lfoot .linkbtn{color:var(--route);font-weight:700;text-decorati
 .sortrow select{font:inherit;padding:.3rem .5rem;border:2px solid var(--line);border-radius:.6rem;background:var(--card);color:inherit;max-width:100%}
 .relbox{margin:.8rem 0;border:1px dashed var(--line);border-radius:.8rem;padding:.4rem .7rem}
 .relbox summary{cursor:pointer;font-weight:600;color:var(--muted);padding:.3rem 0}
+
+.installcard{border-left:6px solid var(--go)}
+.installcard h2{margin:0 0 .3rem;font-size:1.2rem}
+.installcard .go{width:100%}
+.inst-steps{margin-top:.8rem;background:var(--hero-a,#eef5fb);border-radius:12px;padding:.7rem .9rem;font-size:1.05rem}
+.inst-steps p{margin:0 0 .3rem}.inst-steps ol{margin:.2rem 0 0;padding-left:1.3rem;display:grid;gap:.4rem}
+.inst-done{margin:.5rem 0 0;font-size:1.15rem;font-weight:700;color:var(--go)}
 </style>
 <script>
 /*CORE-START*/
@@ -1450,7 +1464,7 @@ function setTab(t){
 }
 function showLanding(msg){
   stopSync(); AUTH.user = null;
-  $('#appwrap').hidden = true; $('#landing').hidden = false;
+  $('#appwrap').hidden = true; $('#landing').hidden = false; try { instInit(); } catch(e){}
   let em = ''; try { em = localStorage.getItem('nsr_email') || ''; } catch(e){}
   $('#a-email').value = em; $('#a-pass').value = '';
   setTab(em ? 'login' : 'register');
@@ -1584,6 +1598,54 @@ async function boot(){
     else { enterApp(stored); }          // bez spojení: ukážeme poslední uložený seznam
   }
 }
+
+/* ---- instalace aplikace (úvodní stránka) ---- */
+const INST = {deferred: null, done: false};
+function instEnv(){
+  const ua = navigator.userAgent || '', ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1), android = /Android/i.test(ua);
+  let br = 'other';
+  if (/SamsungBrowser/i.test(ua)) br = 'samsung'; else if (/EdgA|EdgiOS|Edg\//.test(ua)) br = 'edge'; else if (/OPR|Opera/.test(ua)) br = 'opera';
+  else if (/FxiOS|Firefox/.test(ua)) br = 'firefox'; else if (/CriOS|Chrome/.test(ua)) br = 'chrome'; else if (/Safari/.test(ua)) br = 'safari';
+  return {ios, android, br, phone: ios || android};
+}
+function instStandalone(){ try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch(e){ return false; } }
+function instSteps(){
+  const e = instEnv(), li = a => '<ol>' + a.map(x => '<li>' + x + '</li>').join('') + '</ol>';
+  if (e.ios) {
+    if (e.br === 'safari') return li(['Dole na liště klepněte na ikonu <b>Sdílet</b> (čtvereček se šipkou nahoru).', 'V nabídce zvolte <b>Přidat na plochu</b> (možná je třeba posunout nabídku nahoru).', 'Vpravo nahoře klepněte na <b>Přidat</b>.']);
+    return li(['Klepněte na ikonu <b>Sdílet</b> (čtvereček se šipkou) vedle adresního řádku, nebo na <b>tři tečky</b>.', 'Zvolte <b>Přidat na plochu</b>.', 'Potvrďte klepnutím na <b>Přidat</b>.', 'Kdyby tam volba nebyla, otevřete tuto stránku v prohlížeči <b>Safari</b> a postupujte tam.']);
+  }
+  if (e.android) {
+    if (e.br === 'firefox') return li(['Vpravo nahoře klepněte na <b>tři tečky</b>.', 'Zvolte <b>Instalovat</b> (nebo <b>Přidat na plochu</b>).', 'Potvrďte.']);
+    if (e.br === 'samsung') return li(['Dole klepněte na <b>tři čárky</b> (nabídka).', 'Zvolte <b>Přidat stránku do</b> a pak <b>Plocha</b> (nebo <b>Instalovat aplikaci</b>).', 'Potvrďte.']);
+    return li(['Vpravo nahoře klepněte na <b>tři tečky</b>.', 'Zvolte <b>Instalovat aplikaci</b> (nebo <b>Přidat na plochu</b>).', 'Potvrďte klepnutím na <b>Instalovat</b>.']);
+  }
+  return li(['V adresním řádku vpravo klikněte na ikonu <b>Instalovat</b> (monitor se šipkou).', 'Případně otevřete nabídku prohlížeče (tři tečky) a zvolte <b>Nainstalovat aplikaci</b>.']);
+}
+function instDone(){
+  INST.done = true;
+  const e = instEnv(), box = $('#installbox'); if (!box) return;
+  $('#inst-go').hidden = true; $('#inst-steps').hidden = true; $('#inst-lead').hidden = true;
+  const d = $('#inst-done'); d.hidden = false;
+  d.textContent = e.phone ? 'Hotovo! Aplikaci najdete ve vašem telefonu mezi ostatními aplikacemi, ikona se jmenuje „Nákup“.' : 'Hotovo! Aplikaci najdete ve vašem počítači mezi ostatními aplikacemi.';
+}
+function instInit(){
+  const box = $('#installbox'); if (!box || instStandalone()) return;
+  box.hidden = false;
+  const e = instEnv();
+  if (!e.phone) $('#inst-lead').textContent = 'Aplikaci si můžete nainstalovat i do počítače, otevře se pak jako samostatné okno.';
+}
+async function instClick(){
+  if (INST.deferred) {
+    const dp = INST.deferred; INST.deferred = null;
+    try { dp.prompt(); const r = await dp.userChoice; if (r && r.outcome === 'accepted') { instDone(); return; } } catch(x){}
+  }
+  const st = $('#inst-steps'); st.innerHTML = '<p><b>Postup:</b></p>' + instSteps(); st.hidden = false;
+  try { st.scrollIntoView({block:'nearest'}); } catch(x){}
+}
+window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); INST.deferred = ev; });
+window.addEventListener('appinstalled', () => { INST.deferred = null; instDone(); });
+document.addEventListener('click', ev => { if (ev.target.closest('[data-act="install"]')) instClick(); });
 /*UI-END*/
 
 boot();
