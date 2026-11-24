@@ -48,8 +48,15 @@ try {
         if (main_drug($drugDue) === 0) $st['drug'][$drugDue] = time();
     }
     if ($elecDue) {
+        // Datart se stahuje po davkach 6 kategorii (jeden pozadavek na WEDOSu je casove omezeny); cyklus 1,7,13,19,25
+        $win = 6; $c1 = 1;
+        if ($elecDue === 'datart') { $c1 = (int) ($st['elek_c1'] ?? 1); if ($c1 < 1 || $c1 > 60) $c1 = 1; $_GET['c1'] = $c1; $_GET['c2'] = $c1 + $win - 1; }
         require_once __DIR__ . '/fetch_elektro.php';
-        if (main_elektro($elecDue) === 0) $st['elek'][$elecDue] = time();
+        if (main_elektro($elecDue) === 0) {
+            if ($elecDue !== 'datart') $st['elek'][$elecDue] = time();
+            elseif ($c1 + $win > 30) { $st['elek'][$elecDue] = time(); $st['elek_c1'] = 1; }   // cyklus dokoncen
+            else $st['elek_c1'] = $c1 + $win;
+        }
     }
     if ($storeDue) {
         require_once __DIR__ . '/fetch_stores.php';

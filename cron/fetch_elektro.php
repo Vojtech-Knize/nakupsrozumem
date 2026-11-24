@@ -142,7 +142,7 @@ function main_elektro(?string $only = null): int {
             $items = $fn();
             if ($chain === 'datart' && isset($_GET['c1']) && $prev) {   // davka kategorii: doplnit k drivejsim polozkam
                 $ids = []; foreach ($items as $it) $ids[$it['id']] = true;
-                foreach ($prev['items'] ?? [] as $it) if (($it['chain'] ?? '') === 'datart' && empty($ids[$it['id']])) $items[] = $it;
+                foreach ($prev['items'] ?? [] as $it) if (($it['chain'] ?? '') === 'datart' && empty($ids[$it['id']]) && ($it['validTo'] ?? '9') >= date('Y-m-d')) $items[] = $it;
             }
             if (ELEK_MAXP < 9999) { logmsg("[$chain] test: " . count($items) . ' polozek; diagnostika: ' . json_encode($GLOBALS['elek_dbg'] ?? []) . '; priklad: ' . json_encode(array_slice($items, 0, 3), JSON_UNESCAPED_UNICODE)); continue; }
             if (count($items) < MIN_ITEMS_ELEK[$chain]) throw new RuntimeException('podezrele malo polozek: ' . count($items));
