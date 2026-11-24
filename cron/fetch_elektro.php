@@ -17,8 +17,8 @@ const ELEK_USED_RE = '/zanovn|zánovn|rozbalen|bazar|použit|pouzit/iu';
 function elek_validity(?string $html): array {
     $from = date('Y-m-d'); $to = date('Y-m-d', strtotime('+3 days'));
     if ($html !== null) {
-        $t = preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        if (preg_match('/plat[ií]\s+od\s+[\d. ]+do\s+(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/u', $t, $m)) {
+        $t = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');   // "Akce platí od 1. 11. do 30. 11. 2026." (v HTML jako &iacute;)
+        if (preg_match('/Akce\s+plat[ií]\s+od\s+[\d.\s\x{a0}]+do\s+(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/u', $t, $m)) {
             $d = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
             if ($d >= $from) $to = $d;
         }
