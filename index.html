@@ -628,7 +628,7 @@ function matchItems(items, term){
   if (!tk.length) return [];
   return items.filter(it => {
     const w = it._w || (it._w = words((it.title||'') + ' ' + (it.subtitle||'')));
-    return tk.every(t => w.some(x => x.startsWith(t)));
+    return tk.every(t => w.some(x => x.startsWith(t) || isForm(x, t)));   // isForm: i jiný pád/číslo (pračka → pračky)
   });
 }
 /* Relevance: 1 = hledané slovo je v názvu celé (i v jiném pádu nebo čísle), 2 = je tam, ale jako část jiného zboží
