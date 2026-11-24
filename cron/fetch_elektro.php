@@ -40,7 +40,7 @@ function fetch_datart(): array {
             foreach ($pages as $pg => $h) {
                 if ($h === null) { $done = true; break; }
                 if ($pg === 1) { $got = true; [$from, $to] = elek_validity($h); }
-                $tiles = explode('<div class="product-box ', $h);
+                $tiles = preg_split('~<div class="product-box(?:\s[^"]*)?"~', $h);
                 array_shift($tiles);
                 $new = 0;
                 foreach ($tiles as $t) {
