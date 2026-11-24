@@ -9,7 +9,7 @@
  * Stahujeme jen veřejné stránky, jednou denně, s identifikovatelným User-Agentem.
  */
 
-if (!defined('CRON_KEY')) define('CRON_KEY', 'f728d1acca1405786d3fce1b0a3c771d'); // tajný klíč pro volání přes web
+if (!defined('CRON_KEY')) { $ck = dirname(__DIR__) . '/cronkey.php'; if (is_file($ck)) require_once $ck; else define('CRON_KEY', bin2hex(random_bytes(16))); }   // tajny klic je jen na serveru (cronkey.php), ne v repozitari
 const UA = 'NakupSRozumem/0.1 (+https://nakupsrozumem.cz; denni aktualizace akci pro seniory)';
 const MIN_ITEMS = ['kaufland' => 200, 'penny' => 30, 'albert' => 30, 'norma' => 15, 'coop' => 20, 'terno' => 20, 'lidl' => 30, 'billa' => 100, 'globus' => 200]; // pod tímto počtem berem stahování jako chybné
 

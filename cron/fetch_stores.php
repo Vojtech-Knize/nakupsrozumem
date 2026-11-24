@@ -5,7 +5,7 @@
  * Volání přes web: https://test.nakupsrozumem.cz/cron/fetch_stores.php?key=...
  * Výstup: ../stores.json  (zapisuje se atomicky; při chybě zůstane předchozí verze)
  */
-if (!defined('CRON_KEY')) define('CRON_KEY', 'f728d1acca1405786d3fce1b0a3c771d');
+if (!defined('CRON_KEY')) { $ck = dirname(__DIR__) . '/cronkey.php'; if (is_file($ck)) require_once $ck; else define('CRON_KEY', bin2hex(random_bytes(16))); }   // tajny klic je jen na serveru (cronkey.php), ne v repozitari
 if (!defined('UA')) define('UA', 'NakupSRozumem/0.1 (+https://nakupsrozumem.cz; pozice prodejen z OpenStreetMap)');
 const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 
