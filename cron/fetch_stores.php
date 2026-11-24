@@ -61,7 +61,9 @@ function main_stores(?string $only = null): int {
     if ($only !== null && !isset($brands[$only])) { echo "neznamy retezec\n"; return 1; }
     $names = $only ? [$brands[$only]] : array_values(array_diff_key($brands, ['dm' => 1, 'rossmann' => 1, 'teta' => 1, 'datart' => 1, 'planeo' => 1]));
     $re = '(' . implode('|', $names) . ')';
-    if (in_array($only, ['datart', 'planeo'], true)) {   // elektro: obchody typu electronics/appliance/computer apod.
+    if ($only === 'datart') {   // lehky dotaz v obdelniku Praha + Stredocesky + Jihocesky kraj (celoplosny dotaz konci 503)
+        $q = '[out:json][timeout:60][bbox:48.55,13.35,50.6,15.55];(nwr["brand"~"^datart",i]["shop"];nwr["name"~"^datart",i]["shop"];);out center tags;';
+    } elseif ($only === 'planeo') {   // elektro: obchody typu electronics/appliance/computer apod.
         $names = ['datart' => ['Datart', 'DATART'], 'planeo' => ['Planeo Elektro', 'PLANEO Elektro', 'Planeo', 'PLANEO']][$only];
         $parts = '';
         foreach ($names as $n) $parts .= 'nwr["shop"~"^(electronics|appliance|computer|mobile_phone|hifi|houseware|doityourself)$"]["brand"="' . $n . '"](area.cz);nwr["shop"~"^(electronics|appliance|computer|mobile_phone|hifi|houseware|doityourself)$"]["name"="' . $n . '"](area.cz);';
