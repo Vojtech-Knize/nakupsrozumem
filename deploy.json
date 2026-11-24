@@ -1,7 +1,7 @@
 {
- "version": "2026-11-24 12:04",
+ "version": "2026-11-24 12:07",
  "files": {
-  "index.html": "84d172d4072becf1cb5647d7942fa31477e0efefe6e7343f745ea8d364b66b66",
+  "index.html": "8d1b77f56998442b67e5ea59105841f1a9813eb2fae5c959145e310ee41c24e9",
   "sw.js": "38cd19a6bcce0de3bfc3feac4a66abf3e4b78d3c82921dea331a26a15079c929",
   "manifest.webmanifest": "616fd2e9b316da7bdf52a8f1b9cefc5a20075c32ba8f0cad32d1923dc0f88fae",
   "icon-192.png": "c80bc12c89479d13d8e9bf4b0096d7b9b8ad5c3634cd16949da1a52dba84f086",

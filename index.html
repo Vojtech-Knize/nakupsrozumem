@@ -1030,15 +1030,23 @@ function renderChainFilter(){
 }
 const SORTS = [['price','Nejlevnější nahoře'],['price_desc','Nejdražší nahoře'],['unit','Podle ceny za kg / litr'],['disc','Největší sleva']];
 const sortSel = () => `<label class="sortrow">Řadit: <select data-act="sort" aria-label="Řazení nabídek">${SORTS.map(([v,l]) => `<option value="${v}"${state.sort === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
+/* dříve zaškrtnuté položky, které se právě nezobrazují ve výsledcích hledání (zůstávají zaškrtnuté) */
+function pickedExtra(exclude){
+  const ex = exclude || new Set();
+  const all = activeItems().filter(i => state.sug.has(i.id));
+  const rest = all.filter(i => !ex.has(i.id));
+  return {all: all.length, html: rest.length ? `<p class="sugnote">Dříve zaškrtnuto:</p><ul class="matches">${rest.map(sugRow).join('')}</ul>` : ''};
+}
+function pickBtn(n){ return `<button type="button" class="addbig" data-act="addpicked"${n ? '' : ' disabled'}>Přidat vybrané do seznamu${n ? ' (' + n + ')' : ''}</button>`; }
 function renderSuggest(){
   const el = $('#suggest'), q = state.q.trim();
   const cs = chSel();
-  if (!q && !cs) { el.innerHTML = ''; return; }
+  if (!q && !cs) { const pe = pickedExtra(); el.innerHTML = pe.all ? pe.html + pickBtn(pe.all) : ''; return; }
   const csName = cs ? [...cs].map(c => CHAIN_NAME[c] || c).join(', ') : '';
   if (!q) {   // jen vybrané obchody bez hledaného slova: procházení jejich akcí
-    const pool = activeItems(), mine = sortOffers(pool, state.sort, state.cards).slice(0,40);
+    const pool = activeItems(), mine = sortOffers(pool, state.sort, state.cards).slice(0,40), pe = pickedExtra(new Set(mine.map(i => i.id)));
     if (!pool.length) { el.innerHTML = `<p class="sugnote">U vybraných obchodů (${esc(csName)}) teď nemáme žádné akce.</p>`; return; }
-    el.innerHTML = `<p class="sugnote">${esc(csName)}: ${pool.length} akčních nabídek, ukazujeme ${mine.length}. Pro konkrétní zboží ho napište výše. Zaškrtněte, co chcete koupit:</p>${sortSel()}<ul class="matches">${mine.map(sugRow).join('')}</ul><button type="button" class="addbig" data-act="addpicked"${mine.some(i => state.sug.has(i.id)) ? '' : ' disabled'}>Přidat vybrané do seznamu</button>`;
+    el.innerHTML = `<p class="sugnote">${esc(csName)}: ${pool.length} akčních nabídek, ukazujeme ${mine.length}. Pro konkrétní zboží ho napište výše. Zaškrtněte, co chcete koupit:</p>${sortSel()}<ul class="matches">${mine.map(sugRow).join('')}</ul>${pe.html}${pickBtn(pe.all)}`;
     return;
   }
   const all = activeItems(), cnt = groupCounts(all, q), g = effGroup(cnt, null);
@@ -1057,13 +1065,13 @@ function renderSuggest(){
       }
     }
   }
-  if (!m.length) { el.innerHTML = `<p class="sugnote">Nic v akci jsme nenašli. Zkuste jiné slovo, např. v jednotném čísle.</p><button type="button" class="addbig" data-act="addterm">Přidat „${esc(q)}“ do seznamu</button>`; return; }
+  if (!m.length) { el.innerHTML = `<p class="sugnote">Nic v akci jsme nenašli. Zkuste jiné slovo, např. v jednotném čísle.</p><button type="button" class="addbig" data-act="addterm">Přidat „${esc(q)}“ do seznamu</button>` + (pickedExtra().all ? pickedExtra().html + pickBtn(pickedExtra().all) : ''); return; }
   const shown = sortOffers(m, state.sort, state.cards).slice(0,30), relShown = sortOffers(relM, state.sort, state.cards).slice(0,15);
   const rows = shown.map(sugRow).join('');
-  const n = shown.filter(it => state.sug.has(it.id)).length;
+  const pe = pickedExtra(new Set([...shown, ...relShown].map(i => i.id))), n = pe.all;
   const more = m.length > shown.length ? ` Zobrazeno ${shown.length} nabídek podle zvoleného řazení.` : '';
   const rc = reachableChains(), note = rc ? ' Jen z řetězců, které mají prodejnu ve vašem dosahu.' : '';
-  el.innerHTML = `<p class="sugnote">Nalezeno ${m.length} akčních nabídek${g ? ' (' + GROUP_NAME[g].toLowerCase() + ')' : ''}.${more}${note} Zaškrtněte, co chcete koupit:${others ? '<br>Našli jsme i další druh zboží: ' + esc(others) + '. Po přidání do seznamu můžete přepnout.' : ''}</p>${sortSel()}<ul class="matches">${rows}</ul>${relShown.length ? `<details class="relbox"${state.relOpen ? ' open' : ''}><summary>Související zboží (${relM.length}), např. příchutě a jiné druhy</summary><ul class="matches">${relShown.map(sugRow).join('')}</ul></details>` : ''}<button type="button" class="addbig" data-act="addpicked"${n ? '' : ' disabled'}>Přidat vybrané do seznamu${n ? ' (' + n + ')' : ''}</button><button type="button" class="addbig alt" data-act="addterm">Nebo přidat obecně „${esc(q)}“</button>`;
+  el.innerHTML = `<p class="sugnote">Nalezeno ${m.length} akčních nabídek${g ? ' (' + GROUP_NAME[g].toLowerCase() + ')' : ''}.${more}${note} Zaškrtněte, co chcete koupit:${others ? '<br>Našli jsme i další druh zboží: ' + esc(others) + '. Po přidání do seznamu můžete přepnout.' : ''}</p>${sortSel()}<ul class="matches">${rows}</ul>${relShown.length ? `<details class="relbox"${state.relOpen ? ' open' : ''}><summary>Související zboží (${relM.length}), např. příchutě a jiné druhy</summary><ul class="matches">${relShown.map(sugRow).join('')}</ul></details>` : ''}${pe.html}<button type="button" class="addbig" data-act="addpicked"${n ? '' : ' disabled'}>Přidat vybrané do seznamu${n ? ' (' + n + ')' : ''}</button><button type="button" class="addbig alt" data-act="addterm">Nebo přidat obecně „${esc(q)}“</button>`;
 }
 function renderHome(){
   const el = $('#homebox');
@@ -1264,10 +1272,10 @@ function addPicked(){
 function bind(){
   $('#addform').addEventListener('submit', e => { e.preventDefault(); state.q = $('#q').value; renderSuggest(); });
   $('#q').addEventListener('input', e => { state.q = e.target.value; renderSuggest(); });
-  // po kliknutí do pole se předchozí hledání smaže, aby šlo rovnou psát nový produkt
+  // po kliknutí do pole se předchozí hledání smaže (zaškrtnuté položky zůstávají)
   $('#q').addEventListener('focus', e => {
     if (!e.target.value && !state.q) return;
-    e.target.value = ''; state.q = ''; state.sug = new Set(); renderSuggest();
+    e.target.value = ''; state.q = ''; renderSuggest();
   });
   $('#locform').addEventListener('submit', e => { e.preventDefault(); const v = $('#addr').value.trim(); if (v) geocode(v); });
   document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.act === 'sort') { state.sort = t.value; save(); renderSuggest(); } });
