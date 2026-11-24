@@ -17,7 +17,7 @@ function dg_match(array $item, array $tk): bool {
     $w = dg_words(($item['title'] ?? '') . ' ' . ($item['subtitle'] ?? ''));
     foreach ($tk as $t) {
         $hit = false;
-        foreach ($w as $x) if (str_starts_with($x, $t)) { $hit = true; break; }
+        foreach ($w as $x) if (str_starts_with($x, $t) || (strlen($t) >= 4 && preg_match('/[aeiouy]$/', $t) && str_starts_with($x, substr($t, 0, -1)))) { $hit = true; break; }   // i jiný pád/číslo (pračka → pračky)
         if (!$hit) return false;
     }
     return true;

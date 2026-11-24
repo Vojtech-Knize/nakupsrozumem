@@ -1,7 +1,7 @@
 {
- "version": "2026-11-24 15:53",
+ "version": "2026-11-24 16:37",
  "files": {
-  "index.html": "f6428da65a517c3352caadbcc9d722e509dec272a5afb2556815a8dec006abe8",
+  "index.html": "f55b2053b193a2de24e196af0fe17658388201b550172a63d08e509d1ac1c60d",
   "sw.js": "38cd19a6bcce0de3bfc3feac4a66abf3e4b78d3c82921dea331a26a15079c929",
   "manifest.webmanifest": "616fd2e9b316da7bdf52a8f1b9cefc5a20075c32ba8f0cad32d1923dc0f88fae",
   "icon-192.png": "c80bc12c89479d13d8e9bf4b0096d7b9b8ad5c3634cd16949da1a52dba84f086",
@@ -19,7 +19,7 @@
   "cron/fetch_drug.php": "f445254805f7d1a9b0eb40c149c0c402aca64d033e55471a84e3de37e95a0dd8",
   "cron/fetch_stores.php": "e832b807f046e9594a6e9555431ba2e5de1fd310a0de957633077d86afc95d6f",
   "api/watch.php": "0149971792e9b1bdc7a1aafb5ba4bbf93fac3cbeec5996707b4a0ad3fabc5e1b",
-  "cron/digest.php": "666fe9cbef360d875a77d40aec9ea7d9be5296fa70e84157269aebf629dbe1b6",
+  "cron/digest.php": "b868fbdb0f80b5b8a687fc3f7a79cdb04859acd69e8d29578730b2ac5c5bdb35",
   "cron/probe_elektro.php": "895331d91f8ae4a30e77d20624ba1f5278b53ad13e4dd835a13844fe8109b2d0",
   "cron/fetch_elektro.php": "0650221f50bf9609d074a9cd4d1a91fc1bd1478809991448520bfaa5398c70ce",
   "api/img.php": "ab6bc10655dac4ebf073b81d09e15895f6bc7e0e8fb7822934300bae6a3b98b4"

@@ -644,6 +644,7 @@ function relTier(it, tk){
     const idx = tw.findIndex(w => isForm(w, t));
     let r;
     if (idx >= 0) r = (idx > 0 && MODS.has(tw[idx-1]) && !tk.includes(tw[idx-1])) ? 2 : 1;
+    else if (fw.some(x => isForm(x, t))) r = 1;   // druh zboží v podtitulku (Planeo: „Pračky · kupon …“)
     else if (fw.some(x => x.startsWith(t))) r = 3;
     else return 0;
     if (r > tier) tier = r;
