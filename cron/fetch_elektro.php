@@ -130,6 +130,7 @@ function fetch_planeo(): array {
 function main_elektro(?string $only = null): int {
     $file = dirname(__DIR__) . '/data_elektro.json';
     $prev = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+    if (!is_array($prev)) $prev = null;
     $res = ['updated' => date('c'), 'sources' => [], 'items' => []];
     $src = ['datart' => 'fetch_datart', 'planeo' => 'fetch_planeo'];
     foreach ($src as $chain => $fn) {
@@ -157,7 +158,9 @@ function main_elektro(?string $only = null): int {
     if (ELEK_MAXP < 9999) return 0;
     if (!$res['items']) { logmsg('Zadna data, data_elektro.json se neprepisuje'); return 1; }
     $tmp = $file . '.tmp';
-    file_put_contents($tmp, json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $json = json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false || strlen($json) < 1000) { logmsg('CHYBA json_encode: ' . json_last_error_msg()); echo 'CHYBA json: ' . json_last_error_msg() . "\n"; return 1; }
+    file_put_contents($tmp, $json);
     rename($tmp, $file);
     echo 'OK: ' . count($res['items']) . " polozek\n";
     return 0;
