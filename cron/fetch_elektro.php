@@ -40,6 +40,7 @@ function fetch_datart(): array {
             array_shift($tiles);
             $n = 0;
             foreach ($tiles as $t) {
+                $GLOBALS['elek_dbg']['tiles'] = ($GLOBALS['elek_dbg']['tiles'] ?? 0) + 1;
                 $t = substr($t, 0, 14000);
                 if (!preg_match("~data-gtm-data-product='(\{.*?\})'~s", $t, $mj)) continue;
                 $j = json_decode(html_entity_decode($mj[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
@@ -48,13 +49,12 @@ function fetch_datart(): array {
                 $id = (string) $j['item_id'];
                 if (isset($seen[$id])) continue;
                 $title = trim((string) ($j['item_name'] ?? ''));
-                if ($title === '' || preg_match(ELEK_USED_RE, $title . ' ' . ($j['item_labels'] ?? ''))) continue;
+                if ($title === '' || preg_match(ELEK_USED_RE, $title . ' ' . ($j['item_labels'] ?? ''))) { $GLOBALS['elek_dbg']['used'] = ($GLOBALS['elek_dbg']['used'] ?? 0) + 1; continue; }
                 if (!preg_match('~<a href="(/[^"]+)"~', $t, $mh) || str_starts_with($mh[1], '/bazar/')) continue;
                 $final = preg_match('~data-qa="actual-price"[^>]*>(.*?)</div>~s', $t, $mf) ? drug_num(drug_text($mf[1])) : null;
                 if (!$final) $final = isset($j['price']) ? (float) $j['price'] : null;
-                $oldHtml = preg_match('~cut-price--strike">(.*?)</span>~s', $t, $mo) ? preg_replace('~<span class="sr-only">.*?</span>~s', '', $mo[1]) : '';
-                $orig = $oldHtml !== '' ? drug_num(drug_text($oldHtml)) : null;
-                if (!$final || $final <= 0 || !$orig || $orig <= $final) continue;
+                $orig = preg_match('~cut-price--strike">\s*(?:<span class="sr-only">.*?</span>)?(.*?)</span>~s', $t, $mo) ? drug_num(drug_text($mo[1])) : null;
+                if (!$final || $final <= 0 || !$orig || $orig <= $final) { $GLOBALS['elek_dbg']['bez_slevy'] = ($GLOBALS['elek_dbg']['bez_slevy'] ?? 0) + 1; continue; }
                 $sub = preg_match('~class="item-description">\s*<p>(.*?)</p>~s', $t, $md) ? drug_text($md[1]) : '';
                 if (mb_strlen($sub) > 90) $sub = rtrim(mb_substr($sub, 0, 88), " •,;") . '…';
                 $img = preg_match('~<img[^>]+src="(https://image\.datart\.cz/[^"]+)"~', $t, $mi) ? html_entity_decode($mi[1], ENT_QUOTES) : null;
@@ -132,7 +132,7 @@ function main_elektro(?string $only = null): int {
         if ($only !== null && $only !== $chain) { $keep(); if (isset($prev['sources'][$chain])) $res['sources'][$chain] = $prev['sources'][$chain]; continue; }
         try {
             $items = $fn();
-            if (ELEK_MAXP < 9999) { logmsg("[$chain] test: " . count($items) . ' polozek; priklad: ' . json_encode(array_slice($items, 0, 3), JSON_UNESCAPED_UNICODE)); continue; }
+            if (ELEK_MAXP < 9999) { logmsg("[$chain] test: " . count($items) . ' polozek; diagnostika: ' . json_encode($GLOBALS['elek_dbg'] ?? []) . '; priklad: ' . json_encode(array_slice($items, 0, 3), JSON_UNESCAPED_UNICODE)); continue; }
             if (count($items) < MIN_ITEMS_ELEK[$chain]) throw new RuntimeException('podezrele malo polozek: ' . count($items));
             $res['sources'][$chain] = ['ok' => true, 'count' => count($items), 'fetched' => date('c')];
             array_push($res['items'], ...$items);

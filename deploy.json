@@ -1,5 +1,5 @@
 {
- "version": "2026-11-24 13:33",
+ "version": "2026-11-24 13:39",
  "files": {
   "index.html": "1b8ae401f0b52cc838f8c0b51b42fa743387570b70d9550f6b960e94e8b57046",
   "sw.js": "38cd19a6bcce0de3bfc3feac4a66abf3e4b78d3c82921dea331a26a15079c929",
@@ -21,6 +21,6 @@
   "api/watch.php": "0149971792e9b1bdc7a1aafb5ba4bbf93fac3cbeec5996707b4a0ad3fabc5e1b",
   "cron/digest.php": "666fe9cbef360d875a77d40aec9ea7d9be5296fa70e84157269aebf629dbe1b6",
   "cron/probe_elektro.php": "895331d91f8ae4a30e77d20624ba1f5278b53ad13e4dd835a13844fe8109b2d0",
-  "cron/fetch_elektro.php": "03295d3bbf6ce30a9699a8396e9f760ab7825b57e2fbf11cb8bc341f569a2f4d"
+  "cron/fetch_elektro.php": "b157b1589a5d46aeaa064e688a91f33e9cff63c8c60ef5040e66079735c73a45"
  }
 }
