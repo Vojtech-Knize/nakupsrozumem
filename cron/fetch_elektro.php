@@ -1,7 +1,7 @@
 <?php
 /**
  * Nákup s rozumem - akce elektra (Datart, Planeo) do data_elektro.json.
- * Datart: výpis "Doprodej posledních kusů" (nové zboží, bazar/zánovní se vynechává).
+ * Datart: kampaňové stránky Black Friday (black-friday-01, -02, ...); jen nové zboží s původní cenou, bazar/zánovní se vynechává.
  * Planeo: kampaňové stránky (teď Black Off); cena je "s kuponem", proto je v textu uveden kód.
  * Čteme jen veřejné stránky povolené v robots.txt, bez filtrů a vyhledávání, s identifikovatelným User-Agentem.
  * Volání: cron/fetch_elektro.php?key=...&only=datart|planeo  (bez only oba); &maxp=2 = zkouška (nic se neuloží)
@@ -10,7 +10,7 @@ require_once __DIR__ . '/fetch_drug.php';   // http_get_multi, drug_num, drug_te
 
 define('ELEK_MAXP', isset($_GET['maxp']) ? max(1, (int) $_GET['maxp']) : 9999);
 const MIN_ITEMS_ELEK = ['datart' => 40, 'planeo' => 20];
-const DATART_URL = 'https://www.datart.cz/vyprodej-poslednich-kusu.html';
+const DATART_BASE = 'https://www.datart.cz/black-friday-%02d';   // kampaň Black Friday po kategoriích; po skončení se doplní další kampaň
 const PLANEO_PAGES = ['https://www.planeo.cz/black-off'];   // kampaňové stránky; po skončení akce se doplní nová
 const ELEK_USED_RE = '/zanovn|zánovn|rozbalen|bazar|použit|pouzit/iu';
 
@@ -28,49 +28,54 @@ function elek_validity(?string $html): array {
 
 function fetch_datart(): array {
     $items = []; $seen = [];
-    [$from, $to] = elek_validity(null);
-    $maxp = min(150, ELEK_MAXP); $done = false;
-    for ($p0 = 1; $p0 <= $maxp && !$done; $p0 += 3) {
-        $urls = [];
-        for ($pg = $p0; $pg < $p0 + 3 && $pg <= $maxp; $pg++) $urls[$pg] = DATART_URL . ($pg > 1 ? '?page=' . $pg : '');
-        $pages = http_get_multi($urls);
-        foreach ($pages as $pg => $h) {
-            if ($h === null) { if ($pg <= 3) throw new RuntimeException('Datart: stranka ' . $pg . ' nejde stahnout'); $done = true; break; }
-            $tiles = explode('<div class="product-box ', $h);
-            array_shift($tiles);
-            $n = 0;
-            foreach ($tiles as $t) {
-                $GLOBALS['elek_dbg']['tiles'] = ($GLOBALS['elek_dbg']['tiles'] ?? 0) + 1;
-                $t = substr($t, 0, 14000);
-                if (!preg_match("~data-gtm-data-product='(\{.*?\})'~s", $t, $mj)) continue;
-                $j = json_decode(html_entity_decode($mj[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
-                if (!is_array($j) || empty($j['item_id'])) continue;
-                $n++;
-                $id = (string) $j['item_id'];
-                if (isset($seen[$id])) continue;
-                $title = trim((string) ($j['item_name'] ?? ''));
-                if ($title === '' || preg_match(ELEK_USED_RE, $title . ' ' . ($j['item_labels'] ?? ''))) { $GLOBALS['elek_dbg']['used'] = ($GLOBALS['elek_dbg']['used'] ?? 0) + 1; if (($GLOBALS['elek_dbg']['used']) <= 4) $GLOBALS['elek_dbg']['vzorek'][] = mb_substr($title, 0, 60) . ' | ' . json_encode($j['item_labels'] ?? null, JSON_UNESCAPED_UNICODE); continue; }
-                if (!preg_match('~<a href="(/[^"]+)"~', $t, $mh) || str_starts_with($mh[1], '/bazar/')) continue;
-                $final = preg_match('~data-qa="actual-price"[^>]*>(.*?)</div>~s', $t, $mf) ? drug_num(drug_text($mf[1])) : null;
-                if (!$final) $final = isset($j['price']) ? (float) $j['price'] : null;
-                $orig = preg_match('~cut-price--strike">\s*(?:<span class="sr-only">.*?</span>)?(.*?)</span>~s', $t, $mo) ? drug_num(drug_text($mo[1])) : null;
-                if (!$final || $final <= 0 || !$orig || $orig <= $final) { $GLOBALS['elek_dbg']['bez_slevy'] = ($GLOBALS['elek_dbg']['bez_slevy'] ?? 0) + 1; continue; }
-                $sub = preg_match('~class="item-description">\s*<p>(.*?)</p>~s', $t, $md) ? drug_text($md[1]) : '';
-                if (mb_strlen($sub) > 90) $sub = rtrim(mb_substr($sub, 0, 88), " •,;") . '…';
-                $img = preg_match('~<img[^>]+src="(https://image\.datart\.cz/[^"]+)"~', $t, $mi) ? html_entity_decode($mi[1], ENT_QUOTES) : null;
-                $seen[$id] = true;
-                $items[] = [
-                    'chain' => 'datart', 'id' => 'datart-' . $id,
-                    'title' => $title, 'subtitle' => $sub, 'category' => null,
-                    'price' => $final, 'oldPrice' => $orig, 'cardPrice' => null,
-                    'discount' => (int) round(($orig - $final) / $orig * 100),
-                    'unit' => '', 'basePrice' => null, 'validFrom' => $from, 'validTo' => $to,
-                    'img' => $img, 'url' => 'https://www.datart.cz' . $mh[1],
-                ];
+    $miss = 0; $maxcat = min(60, ELEK_MAXP < 9999 ? ELEK_MAXP : 60); $maxp = min(40, ELEK_MAXP);
+    // Kampaňové stránky Black Friday: black-friday-01, -02, ... (každá kategorie zboží zvlášť); konec po 3 chybějících za sebou
+    for ($c = 1; $c <= $maxcat && $miss < 3; $c++) {
+        $base = sprintf(DATART_BASE, $c);
+        $from = date('Y-m-d'); $to = date('Y-m-d', strtotime('+3 days')); $got = false; $done = false;
+        for ($p0 = 1; $p0 <= $maxp && !$done; $p0 += 3) {
+            $urls = [];
+            for ($pg = $p0; $pg < $p0 + 3 && $pg <= $maxp; $pg++) $urls[$pg] = $base . ($pg > 1 ? '?page=' . $pg : '');
+            $pages = http_get_multi($urls);
+            foreach ($pages as $pg => $h) {
+                if ($h === null) { $done = true; break; }
+                if ($pg === 1) { $got = true; [$from, $to] = elek_validity($h); }
+                $tiles = explode('<div class="product-box ', $h);
+                array_shift($tiles);
+                $new = 0;
+                foreach ($tiles as $t) {
+                    $GLOBALS['elek_dbg']['tiles'] = ($GLOBALS['elek_dbg']['tiles'] ?? 0) + 1;
+                    $t = substr($t, 0, 14000);
+                    if (!preg_match("~data-gtm-data-product='(\{.*?\})'~s", $t, $mj)) continue;
+                    $j = json_decode(html_entity_decode($mj[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+                    if (!is_array($j) || empty($j['item_id'])) continue;
+                    $id = (string) $j['item_id'];
+                    if (isset($seen[$id])) continue;
+                    $seen[$id] = true; $new++;
+                    $title = trim((string) ($j['item_name'] ?? ''));
+                    if ($title === '' || preg_match(ELEK_USED_RE, $title . ' ' . ($j['item_labels'] ?? ''))) { $GLOBALS['elek_dbg']['zanovni'] = ($GLOBALS['elek_dbg']['zanovni'] ?? 0) + 1; continue; }
+                    if (!preg_match('~<a href="(/[^"]+)"~', $t, $mh) || str_starts_with($mh[1], '/bazar/')) continue;
+                    $final = preg_match('~data-qa="actual-price"[^>]*>(.*?)</div>~s', $t, $mf) ? drug_num(drug_text($mf[1])) : null;
+                    if (!$final) $final = isset($j['price']) ? (float) $j['price'] : null;
+                    $orig = preg_match('~cut-price--strike">\s*(?:<span class="sr-only">.*?</span>)?(.*?)</span>~s', $t, $mo) ? drug_num(drug_text($mo[1])) : null;
+                    if (!$final || $final <= 0 || !$orig || $orig <= $final) { $GLOBALS['elek_dbg']['bez_slevy'] = ($GLOBALS['elek_dbg']['bez_slevy'] ?? 0) + 1; continue; }
+                    $sub = preg_match('~class="item-description">\s*<p>(.*?)</p>~s', $t, $md) ? drug_text($md[1]) : '';
+                    if (mb_strlen($sub) > 90) $sub = rtrim(mb_substr($sub, 0, 88), " •,;") . '…';
+                    $img = preg_match('~<img[^>]+src="(https://image\.datart\.cz/[^"]+)"~', $t, $mi) ? html_entity_decode($mi[1], ENT_QUOTES) : null;
+                    $items[] = [
+                        'chain' => 'datart', 'id' => 'datart-' . $id,
+                        'title' => $title, 'subtitle' => $sub, 'category' => null,
+                        'price' => $final, 'oldPrice' => $orig, 'cardPrice' => null,
+                        'discount' => (int) round(($orig - $final) / $orig * 100),
+                        'unit' => '', 'basePrice' => null, 'validFrom' => $from, 'validTo' => $to,
+                        'img' => $img, 'url' => 'https://www.datart.cz' . $mh[1],
+                    ];
+                }
+                if ($new === 0) { $done = true; break; }
             }
-            if ($n === 0) { $done = true; break; }
+            usleep(300000);
         }
-        usleep(300000);
+        $miss = $got ? 0 : $miss + 1;
     }
     return $items;
 }
