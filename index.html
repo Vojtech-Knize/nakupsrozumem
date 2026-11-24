@@ -954,7 +954,8 @@ function linesFor(){
 }
 
 /* ---- náhled produktu (obrázek z webu řetězce; když se nenačte, zmizí) ---- */
-const thumb = it => it && it.img ? `<img class="th" src="${esc(it.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
+const imgSrc = u => /^https:\/\/image\.datart\.cz\/foto\//.test(u) ? 'api/img.php?u=' + encodeURIComponent(u) : u;
+const thumb = it => it && it.img ? `<img class="th" src="${esc(imgSrc(it.img))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
 
 /* ---- ozdoby ---- */
 function burstSvg(){

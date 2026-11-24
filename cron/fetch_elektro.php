@@ -109,10 +109,12 @@ function fetch_planeo(): array {
                 if (!$reg || !$cpn || $cpn >= $reg || $code === '') continue;
                 if (!preg_match('~<a href="(/[^"]+)">~', $t, $mh)) continue;
                 $img = preg_match('~<img src="(https://mc-static\.fast\.eu/pics/[^"]+)"~', $t, $mim) ? html_entity_decode($mim[1], ENT_QUOTES) : null;
+                $cat = preg_match('/data-gtm-product-item-category2="([^"]*)"/', $t, $mcat) ? $mcat[1] : (preg_match('/data-gtm-product-item-category="([^"]*)"/', $t, $mcat) ? $mcat[1] : '');
+                $cat = trim(html_entity_decode($cat, ENT_QUOTES | ENT_HTML5, 'UTF-8'));   // druh zboží (Pračky, Myčky nádobí…) – v názvu není, ale hledá se podle něj
                 $items[] = [
                     'chain' => 'planeo', 'id' => 'planeo-' . $id,
                     'title' => trim(($brand && stripos($title, $brand) !== 0 ? $brand . ' ' : '') . $title),
-                    'subtitle' => 'Cena po zadání kuponu ' . $code . ' v košíku nebo na prodejně',
+                    'subtitle' => ($cat !== '' ? $cat . ' · ' : '') . 'kupon ' . $code . ' v košíku nebo na prodejně',
                     'category' => null,
                     'price' => $cpn, 'oldPrice' => $reg, 'cardPrice' => null,
                     'discount' => (int) round(($reg - $cpn) / $reg * 100),

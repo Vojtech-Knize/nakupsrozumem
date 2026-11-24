@@ -1,7 +1,7 @@
 {
- "version": "2026-11-24 15:27",
+ "version": "2026-11-24 15:44",
  "files": {
-  "index.html": "1b8ae401f0b52cc838f8c0b51b42fa743387570b70d9550f6b960e94e8b57046",
+  "index.html": "a77dbf96fb0416af63c5cdcecd41af86a01c9697cbb8919be26c1c4e1a2b2f9a",
   "sw.js": "38cd19a6bcce0de3bfc3feac4a66abf3e4b78d3c82921dea331a26a15079c929",
   "manifest.webmanifest": "616fd2e9b316da7bdf52a8f1b9cefc5a20075c32ba8f0cad32d1923dc0f88fae",
   "icon-192.png": "c80bc12c89479d13d8e9bf4b0096d7b9b8ad5c3634cd16949da1a52dba84f086",
@@ -21,6 +21,7 @@
   "api/watch.php": "0149971792e9b1bdc7a1aafb5ba4bbf93fac3cbeec5996707b4a0ad3fabc5e1b",
   "cron/digest.php": "666fe9cbef360d875a77d40aec9ea7d9be5296fa70e84157269aebf629dbe1b6",
   "cron/probe_elektro.php": "895331d91f8ae4a30e77d20624ba1f5278b53ad13e4dd835a13844fe8109b2d0",
-  "cron/fetch_elektro.php": "c2780084e5d46e7928aff582ee556ddc593fa5a5298ac88c4989ace1ff504285"
+  "cron/fetch_elektro.php": "0650221f50bf9609d074a9cd4d1a91fc1bd1478809991448520bfaa5398c70ce",
+  "api/img.php": "ab6bc10655dac4ebf073b81d09e15895f6bc7e0e8fb7822934300bae6a3b98b4"
  }
 }
