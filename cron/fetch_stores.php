@@ -45,7 +45,7 @@ function normalize_stores(array $elements, ?string $force = null): array {
         $out[] = [
             'chain' => $chain,
             'name'  => ['kaufland' => 'Kaufland', 'penny' => 'Penny', 'lidl' => 'Lidl', 'billa' => 'Billa', 'globus' => 'Globus', 'albert' => 'Albert', 'norma' => 'Norma', 'coop' => 'Coop', 'terno' => 'Terno', 'dm' => 'dm', 'rossmann' => 'Rossmann', 'teta' => 'Teta', 'datart' => 'Datart', 'planeo' => 'Planeo'][$chain],
-            'kind'  => (in_array($chain, ['kaufland', 'globus'], true) || ($chain === 'albert' && stripos((string) ($t['name'] ?? ''), 'hyper') !== false)) ? 'hypermarket' : 'supermarket',
+            'kind'  => in_array($chain, ['datart', 'planeo'], true) ? 'prodejna' : ((in_array($chain, ['kaufland', 'globus'], true) || ($chain === 'albert' && stripos((string) ($t['name'] ?? ''), 'hyper') !== false)) ? 'hypermarket' : 'supermarket'),
             'city'  => $t['addr:city'] ?? '',
             'addr'  => $street,
             'lat'   => round((float) $lat, 5),

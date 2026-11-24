@@ -35,7 +35,7 @@ function run_digest(): int {
         $items = is_array($j) ? ($j['items'] ?? []) : [];
         return array_values(array_filter($items, fn($i) => (empty($i['validFrom']) || $i['validFrom'] <= $today) && (empty($i['validTo']) || $i['validTo'] >= $today) && ($i['price'] ?? 0) > 0));
     };
-    $data = ['food' => $load('data.json'), 'drug' => $load('data_drug.json')];
+    $data = ['food' => $load('data.json'), 'drug' => $load('data_drug.json'), 'elec' => $load('data_elektro.json')];
     if (!$data['food']) return 0;   // data se nenačetla: raději nic neposílat
 
     $rows = db()->query('SELECT w.user_id, w.terms, u.email FROM watch w JOIN users u ON u.id = w.user_id WHERE w.digest = 1 AND w.last_sent < ' . (time() - 6 * 86400 - 43200) . ' LIMIT 25')->fetchAll();
@@ -46,7 +46,7 @@ function run_digest(): int {
         foreach ($favs as $f) {
             $tk = dg_words((string)($f['term'] ?? ''));
             if (!$tk) continue;
-            $pool = $data[($f['cat'] ?? '') === 'drug' ? 'drug' : 'food'];
+            $pool = $data[in_array(($f['cat'] ?? ''), ['drug', 'elec'], true) ? $f['cat'] : 'food'];
             $m = array_values(array_filter($pool, fn($i) => dg_match($i, $tk)));
             if (!$m) continue;
             usort($m, fn($a, $b) => $a['price'] <=> $b['price']);

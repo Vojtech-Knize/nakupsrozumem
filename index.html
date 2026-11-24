@@ -360,6 +360,7 @@ details.more summary{cursor:pointer;font-weight:800;min-height:3rem;display:flex
   <div class="cattabs" role="tablist" aria-label="Druh obchodů">
     <button type="button" role="tab" data-act="cat" data-v="food" aria-selected="true" aria-pressed="true">Řetězce potraviny</button>
     <button type="button" role="tab" data-act="cat" data-v="drug" aria-selected="false" aria-pressed="false">Řetězce drogerie</button>
+    <button type="button" role="tab" data-act="cat" data-v="elec" aria-selected="false" aria-pressed="false">Řetězce elektro</button>
   </div>
 
   <p class="demo" id="datanote" role="status">Načítám aktuální akce…</p>
@@ -401,7 +402,7 @@ details.more summary{cursor:pointer;font-weight:800;min-height:3rem;display:flex
     </div>
   </div>
 
-  <footer>Akce: veřejné letáky řetězců Kaufland, Penny, Lidl, Billa a Globus, aktualizace jednou denně. Pozice prodejen: © přispěvatelé OpenStreetMap (ODbL). Ceny a dostupnost vždy ověřte v obchodě. <button type="button" class="linkbtn" data-act="contact">Napište nám</button></footer>
+  <footer>Akce: veřejné letáky a akční nabídky řetězců (potraviny, drogerie Rossmann a Teta, elektro Datart a Planeo), aktualizace jednou denně. Pozice prodejen: © přispěvatelé OpenStreetMap (ODbL). Ceny a dostupnost vždy ověřte v obchodě. <button type="button" class="linkbtn" data-act="contact">Napište nám</button></footer>
 </div>
 
 <dialog id="contactdlg" class="contactdlg" aria-labelledby="h-contact">
@@ -553,7 +554,7 @@ h2 .n{background:var(--go);color:var(--on-go)}
 .cattabs{display:flex;gap:.4rem;margin:.6rem 0 .2rem;border-bottom:3px solid rgba(0,0,0,.08)}
 .cattabs button{flex:1;font:inherit;font-weight:800;font-size:1.05rem;padding:.75rem .5rem;border:2px solid transparent;border-bottom:0;border-radius:14px 14px 0 0;background:var(--line);color:var(--muted);cursor:pointer;min-height:48px}
 .cattabs button[aria-selected="true"]{background:var(--go);color:var(--on-go)}
-html[data-cat="drug"] [data-fmtrow],html[data-cat="drug"] .fmtrow{display:none}
+html[data-cat="drug"] [data-fmtrow],html[data-cat="drug"] .fmtrow,html[data-cat="elec"] [data-fmtrow],html[data-cat="elec"] .fmtrow{display:none}
 @media print{.cattabs{display:none}}
 
 .contactdlg{border:2px solid var(--ink);border-radius:16px;padding:1rem 1.1rem;max-width:min(32rem,92vw);width:100%;background:var(--card);color:var(--ink)}
@@ -587,8 +588,9 @@ const MODES = {
   car: {label:'Autem', radius:30000, speed:28,  wait:3, rate:8, verb:'jízda autem'}
 };
 const THRESH = 15; // o kolik Kč smí být menší počet obchodů dražší, aby byl pořád doporučen
-const CHAIN_NAME = {kaufland:'Kaufland', penny:'Penny', lidl:'Lidl', billa:'Billa', globus:'Globus', albert:'Albert', norma:'Norma', coop:'Coop', terno:'Terno', dm:'dm', rossmann:'Rossmann', teta:'Teta'};
+const CHAIN_NAME = {kaufland:'Kaufland', penny:'Penny', lidl:'Lidl', billa:'Billa', globus:'Globus', albert:'Albert', norma:'Norma', coop:'Coop', terno:'Terno', dm:'dm', rossmann:'Rossmann', teta:'Teta', datart:'Datart', planeo:'Planeo'};
 const DRUG_CHAINS = ['dm','rossmann','teta'];
+const ELEC_CHAINS = ['datart','planeo'];
 const FOOD_CHAINS = ['kaufland','penny','lidl','billa','globus','albert','norma','coop','terno'];
 
 const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
@@ -804,12 +806,13 @@ function plan(lines, stores, mode, max, fmt){
 }
 
 /* ---- druh zboží (potraviny / drogerie / ostatní) ---- */
-const GROUP_NAME = {potraviny:'Potraviny', drogerie:'Drogerie', ostatni:'Ostatní'};
+const GROUP_NAME = {potraviny:'Potraviny', drogerie:'Drogerie', ostatni:'Ostatní', elektro:'Elektro'};
 const RE_DROG = /telov|sprch|sampon|kondicion|pletov|zubni|ustni|deodor|mydl|praci |prani |avivaz|cistic|saponat|toaletni papir|kapesnik|ubrousk|plenk|vlozk|holic|parfem|vlasov|odlicovac|make-?up|rtenk|krem na|gel na|do mycky|dezinfek|odstranovac|pro vlasy|na vlasy|sampon/;
 const RE_OSTATNI = /lego|hracka|hracky|puzzle|panenk|hrnec|panev|vysavac|mixer|konvice|baterie|zarovk|svicka|dekorac|ponozk|obleceni|bunda|boty|naradi|vrtack|pro psy|pro kocky|kocici|krmivo|granule|kapsicky pro|\bdog\b|\bcat\b/;
 function itemGroup(it){
   if (it._g) return it._g;
   if (DRUG_CHAINS.includes(it.chain)) return (it._g = 'drogerie');
+  if (ELEC_CHAINS.includes(it.chain)) return (it._g = 'elektro');
   const c = norm(it.category||''), t = norm(it.title||'');
   let g = null;
   if (it.chain === 'billa') g = /^(drogerie|pece o dite|domacnost)/.test(c) ? 'drogerie' : /^mazlicci/.test(c) ? 'ostatni' : (c ? 'potraviny' : null);
@@ -854,7 +857,7 @@ const dateCs = iso => { if(!iso) return ''; const [y,m,d] = iso.split('-'); retu
 const state = {
   basket: [],            // [{term, qty}]
   home: null,            // {lat, lon, label}
-  sug:new Set(), cat:'food', mode:'car', rad:{foot:3000,bus:6000,car:30000}, chain:null, chs:{food:[],drug:[]}, sort:'price', max:2, cards:false, fmt:'all', sel:null, q:'', size:'m',
+  sug:new Set(), cat:'food', mode:'car', rad:{foot:3000,bus:6000,car:30000}, chain:null, chs:{food:[],drug:[],elec:[]}, sort:'price', max:2, cards:false, fmt:'all', sel:null, q:'', size:'m',
   done:new Set(), copied:null, copyText:'',
   favs:[], digest:false, top:false, tomb:{}, doneMap:{}, cfgT:0, pick:null,   // favs = hlídané věci [{term,cat}]; podklady pro společný seznam
   last:null, lastT:0, lastOpen:false, lastOff:new Set()   // poslední nákup
@@ -892,11 +895,15 @@ function applyRad(){
     sel.value = String(v);
   });
 }
-const bcat = b => b.cat === 'drug' ? 'drug' : 'food';
-const bk = (term, cat) => (cat === 'drug' ? 'd~' : '') + norm(term);
+const catKey = c => c === 'drug' || c === 'elec' ? c : 'food';   // druh obchodů: potraviny / drogerie / elektro
+const bcat = b => catKey(b.cat);
+const bk = (term, cat) => ({drug:'d~', elec:'e~'}[cat] || '') + norm(term);
+const catData = () => state.cat === 'drug' ? DATA_DRUG : state.cat === 'elec' ? DATA_ELEK : DATA;
+const CAT_HINT = {food:'mléko', drug:'zubní pasta', elec:'pračka'};
+const CAT_PLACEHOLDER = {food:'Např. mléko, jogurt, pračka', drug:'Např. zubní pasta, prášek, šampon', elec:'Např. pračka, televize, vysavač'};
 const catBasket = () => state.basket.filter(b => bcat(b) === state.cat);
-const catChains = () => state.cat === 'drug' ? DRUG_CHAINS : FOOD_CHAINS;
-const catFmt = () => state.cat === 'drug' ? 'all' : state.fmt;
+const catChains = () => state.cat === 'drug' ? DRUG_CHAINS : state.cat === 'elec' ? ELEC_CHAINS : FOOD_CHAINS;
+const catFmt = () => state.cat === 'food' ? state.fmt : 'all';
 const touchCfg = () => { state.cfgT = Date.now(); };
 
 /* ---- data ---- */
@@ -915,7 +922,7 @@ function reachableChains(){
 function chSel(){ const a = (state.chs && state.chs[state.cat]) || []; return a.length ? new Set(a) : null; }
 function activeAll(){
   const t = todayIso(), rc = reachableChains();
-  const src = state.cat === 'drug' ? DATA_DRUG.items : DATA.items;
+  const src = catData().items;
   return src.filter(i => validNow(i, t) && (!rc || rc.has(i.chain)));
 }
 function activeItems(){ const cs = chSel(), a = activeAll(); return cs ? a.filter(i => cs.has(i.chain)) : a; }
@@ -961,14 +968,14 @@ const plural = n => n === 1 ? 'věc' : (n >= 2 && n <= 4 ? 'věci' : 'věcí');
 function renderLast(){
   const el = $('#lastbox'); if (!el) return;
   const L = state.last;
-  const myLast = L ? L.items.filter(x => (x.cat === 'drug' ? 'drug' : 'food') === state.cat) : [];
+  const myLast = L ? L.items.filter(x => catKey(x.cat) === state.cat) : [];
   if (!L || !myLast.length) { el.innerHTML = ''; return; }
   const d = new Date(L.at).toLocaleDateString('cs-CZ', {day:'numeric', month:'numeric'});
   let h = `<button type="button" class="btn lastbtn" data-act="lasttoggle" aria-expanded="${state.lastOpen}">${state.lastOpen ? 'Skrýt poslední nákup' : 'Zobrazit poslední nákup'} <span class="lastmeta">(${d}, ${myLast.length}${NBSP}${plural(myLast.length)})</span></button>`;
   if (state.lastOpen) {
     const inList = new Set(catBasket().map(b => norm(b.term)));
     h += `<div class="lastpanel"><p class="help" style="margin-top:0">Zaškrtněte, co chcete koupit znovu. Co už nechcete, smažte. Další zboží přidáte hledáním nahoře.</p><ul class="lastlist">` +
-      L.items.map((x, i) => (x.cat === 'drug' ? 'drug' : 'food') !== state.cat ? '' : `<li><label><input type="checkbox" data-lt="${i}"${state.lastOff.has(norm(x.term)) ? '' : ' checked'}><span>${esc(x.term)}${x.qty > 1 ? ' × ' + x.qty : ''}${inList.has(norm(x.term)) ? ' <em>(už v seznamu)</em>' : ''}</span></label><button type="button" class="rm" data-act="lastdel" data-i="${i}" aria-label="Smazat ${esc(x.term)} z posledního nákupu">Smazat</button></li>`).join('') +
+      L.items.map((x, i) => catKey(x.cat) !== state.cat ? '' : `<li><label><input type="checkbox" data-lt="${i}"${state.lastOff.has(norm(x.term)) ? '' : ' checked'}><span>${esc(x.term)}${x.qty > 1 ? ' × ' + x.qty : ''}${inList.has(norm(x.term)) ? ' <em>(už v seznamu)</em>' : ''}</span></label><button type="button" class="rm" data-act="lastdel" data-i="${i}" aria-label="Smazat ${esc(x.term)} z posledního nákupu">Smazat</button></li>`).join('') +
       `</ul><button type="button" class="addbig" data-act="lastadd">Přidat vybrané do seznamu</button></div>`;
   }
   el.innerHTML = h;
@@ -977,8 +984,8 @@ function finishShopping(){
   const mine = catBasket();
   if (!mine.length) return;
   const now = Date.now();
-  const others = state.last ? state.last.items.filter(x => (x.cat === 'drug' ? 'drug' : 'food') !== state.cat) : [];
-  state.last = {at:now, items:others.concat(mine.map(b => ({term:b.term, qty:b.qty, grp:b.grp || null, cat:state.cat === 'drug' ? 'drug' : null})))}; state.lastT = now;
+  const others = state.last ? state.last.items.filter(x => catKey(x.cat) !== state.cat) : [];
+  state.last = {at:now, items:others.concat(mine.map(b => ({term:b.term, qty:b.qty, grp:b.grp || null, cat:state.cat === 'food' ? null : state.cat})))}; state.lastT = now;
   mine.forEach(b => { state.tomb[bk(b.term, bcat(b))] = now; });
   state.basket = state.basket.filter(b => bcat(b) !== state.cat);
   Object.keys(state.doneMap).forEach(k => { if (state.doneMap[k].v) state.doneMap[k] = {v:false, t:now}; });
@@ -1007,10 +1014,10 @@ function lastAdd(){
   if (!state.last) return;
   const have = new Set(catBasket().map(b => norm(b.term))), now = Date.now(); let n = 0;
   state.last.items.forEach((x, i) => {
-    if ((x.cat === 'drug' ? 'drug' : 'food') !== state.cat) return;
+    if (catKey(x.cat) !== state.cat) return;
     const k = norm(x.term); if (state.lastOff.has(k) || have.has(k)) return;
     delete state.tomb[bk(x.term, state.cat)];
-    const b = {term:x.term, qty:x.qty, t:now, o:now + i}; if (x.grp) b.grp = x.grp; if (state.cat === 'drug') b.cat = 'drug';
+    const b = {term:x.term, qty:x.qty, t:now, o:now + i}; if (x.grp) b.grp = x.grp; if (state.cat !== 'food') b.cat = state.cat;
     state.basket.push(b); n++;
   });
   state.lastOpen = false; state.lastOff = new Set();
@@ -1021,7 +1028,7 @@ function lastAdd(){
 /* ---- vstupy ---- */
 function renderBasket(){
   const el = $('#basket');
-  if (!catBasket().length) { el.innerHTML = `<li class="empty">Zatím nic. Napište třeba „${state.cat === 'drug' ? 'zubní pasta' : 'mléko'}“ a stiskněte Hledat.</li>`; return; }
+  if (!catBasket().length) { el.innerHTML = `<li class="empty">Zatím nic. Napište třeba „${CAT_HINT[state.cat] || 'mléko'}“ a stiskněte Hledat.</li>`; return; }
   const items = activeItems();
   el.innerHTML = state.basket.map((b,i) => {
     if (bcat(b) !== state.cat) return '';
@@ -1051,7 +1058,7 @@ function renderChainFilter(){
   const chains = Object.keys(cnt).sort((a,b) => (CHAIN_NAME[a]||a).localeCompare(CHAIN_NAME[b]||b, 'cs'));
   state.chs[state.cat] = (state.chs[state.cat] || []).filter(c => cnt[c]);
   const sel = new Set(state.chs[state.cat]);
-  const dmNote = state.cat === 'drug' ? '<p class="help" style="margin:.4rem 0 0">dm drogerie nemá akční ceny (používá dlouhodobě nízké ceny), proto u ní akce nehledáme. Prodejnu dm najdete jen v seznamu obchodů.</p>' : '';
+  const dmNote = state.cat === 'drug' ? '<p class="help" style="margin:.4rem 0 0">dm drogerie nemá akční ceny (používá dlouhodobě nízké ceny), proto u ní akce nehledáme. Prodejnu dm najdete jen v seznamu obchodů.</p>' : state.cat === 'elec' ? '<p class="help" style="margin:.4rem 0 0">U Planea platí uvedená cena po zadání kuponu (kód je u zboží). Akční elektro bývá skladem jen na e-shopu, proto si před cestou ověřte dostupnost v prodejně.</p>' : '';
   if (chains.length < 2) { el.innerHTML = dmNote; return; }
   const chip = (v, label, on) => `<button type="button" data-act="chain" data-v="${v}" aria-pressed="${on}">${esc(label)}</button>`;
   el.innerHTML = `<div class="cfrow" role="group" aria-label="Vyberte obchody, ve kterých chcete nakupovat">${chip('', 'Všechny', !sel.size)}${chains.map(c => chip(c, CHAIN_NAME[c] || c, sel.has(c))).join('')}</div><p class="help" style="margin:.3rem 0 0">${sel.size ? 'Hledáme i plánujeme trasu jen v: ' + esc([...sel].map(c => CHAIN_NAME[c] || c).join(', ')) + '. Klepnutím můžete přidat další.' : 'Klepnutím vyberte jen některé obchody (můžete i více).'}</p>${dmNote}`;
@@ -1133,7 +1140,7 @@ function updateControls(){
   document.querySelectorAll('[data-act="max"]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.v === state.max));
   document.documentElement.dataset.cat = state.cat;
   document.querySelectorAll('[data-act="cat"]').forEach(b => { const on = b.dataset.v === state.cat; b.setAttribute('aria-selected', on); b.setAttribute('aria-pressed', on); });
-  const qi = $('#q'); if (qi) qi.placeholder = state.cat === 'drug' ? 'Např. zubní pasta, prášek, šampon' : 'Např. mléko, jogurt, pračka';
+  const qi = $('#q'); if (qi) qi.placeholder = CAT_PLACEHOLDER[state.cat] || CAT_PLACEHOLDER.food;
   document.querySelectorAll('[data-act="fmt"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.fmt));
   document.querySelectorAll('[data-act="top"]').forEach(b => b.setAttribute('aria-pressed', state.top ? 'true' : 'false'));
   document.querySelectorAll('[data-act="size"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.size));
@@ -1143,11 +1150,11 @@ function updateControls(){
   const M = MODES[state.mode];
   $('#ratehelp').textContent = 'Cestu počítáme na ' + M.rate + ' Kč za km (' + M.verb + '). Díky tomu poznáme, kdy se objíždění obchodů nevyplatí.';
   const n = $('#datanote');
-  const DD = state.cat === 'drug' ? DATA_DRUG : DATA;
+  const DD = catData();
   if (!DATA.updated) { n.textContent = 'Načítám aktuální akce…'; return; }
   const cnt = activeItems().length;
   const ch = Object.entries(DD.sources||{}).filter(([k,v]) => v.ok).map(([k]) => CHAIN_NAME[k]||k).join(', ');
-  n.textContent = cnt ? `Aktuální akce: ${cnt} nabídek z řetězců ${ch}. Data z ${new Date(DD.updated || DATA.updated).toLocaleDateString('cs-CZ')}.` : (state.cat === 'drug' && !DATA_DRUG.updated ? 'Akce drogerií se teprve připravují, zkuste to později.' : 'Aktuální akce se zatím nepodařilo načíst.');
+  n.textContent = cnt ? `Aktuální akce: ${cnt} nabídek z řetězců ${ch}. Data z ${new Date(DD.updated || DATA.updated).toLocaleDateString('cs-CZ')}.` : (state.cat !== 'food' && !DD.updated ? 'Akce ' + (state.cat === 'elec' ? 'elektra' : 'drogerií') + ' se teprve připravují, zkuste to později.' : 'Aktuální akce se zatím nepodařilo načíst.');
 }
 
 /* ---- mapa ---- */
@@ -1226,16 +1233,16 @@ function msg(t){ return '<section class="card"><p class="empty" style="margin:0"
 function renderPlan(){
   const el = $('#plan');
   if (!catBasket().length) { el.innerHTML = msg('Přidejte do seznamu aspoň jednu věc. Pak tu uvidíte akční ceny a trasu.'); return; }
-  if (!(state.cat === 'drug' ? DATA_DRUG.items : DATA.items).length) { el.innerHTML = msg('Akce se zatím nenačetly. Zkuste stránku za chvíli obnovit.'); return; }
+  if (!catData().items.length) { el.innerHTML = msg('Akce se zatím nenačetly. Zkuste stránku za chvíli obnovit.'); return; }
   if (!state.home) { el.innerHTML = msg('Zadejte v kroku 2, odkud půjdete. Podle toho vybereme nejbližší obchody.'); return; }
   const stores = nearbyStores();
-  if (!stores.length) { el.innerHTML = msg('V okolí vaší adresy jsme nenašli žádný obchod z našeho přehledu (' + (state.cat === 'drug' ? 'dm, Rossmann, Teta' : 'Kaufland, Penny, Lidl, Billa, Globus, Albert, Norma, Coop, Terno') + '). Zkuste jinou adresu nebo větší dosah.'); return; }
+  if (!stores.length) { el.innerHTML = msg('V okolí vaší adresy jsme nenašli žádný obchod z našeho přehledu (' + catChains().map(c => CHAIN_NAME[c] || c).join(', ') + '). Zkuste jinou adresu nebo větší dosah.'); return; }
   const {lines, none} = linesFor();
   const noneHTML = none.length ? `<section class="card noaction"><b>Bez akce:</b> ${none.map(b => esc(b.term)).join(', ')}<p class="help">Tyto věci teď v akci nejsou. Koupíte je za běžnou cenu v kterémkoli obchodě po cestě.</p></section>` : '';
   if (!lines.length) { el.innerHTML = msg('Pro nic z vašeho seznamu teď není akce v okolních obchodech.') + noneHTML; return; }
   const res = plan(lines, stores, state.mode, state.max, catFmt());
   if (!res.options.length) {
-    const why = state.cat !== 'drug' && state.fmt === 'hyper' && state.mode === 'foot' ? 'Hypermarkety jsou od domova dál, než dojdete pěšky. Zkuste MHD nebo auto, nebo zvolte typ obchodů „Vše“.' : 'V dosahu zvolené dopravy nemáme obchod s akcí na vaše zboží. Zkuste MHD nebo auto.';
+    const why = state.cat === 'food' && state.fmt === 'hyper' && state.mode === 'foot' ? 'Hypermarkety jsou od domova dál, než dojdete pěšky. Zkuste MHD nebo auto, nebo zvolte typ obchodů „Vše“.' : 'V dosahu zvolené dopravy nemáme obchod s akcí na vaše zboží. Zkuste MHD nebo auto.';
     el.innerHTML = msg(why) + noneHTML; return;
   }
   const { options, rec, baseline, bestOpt } = res;
@@ -1306,7 +1313,7 @@ function addTerm(){
   const t = state.q.trim(); if (!t) return;
   const ex = state.basket.find(b => bk(b.term, bcat(b)) === bk(t, state.cat)), now = Date.now();
   delete state.tomb[bk(t, state.cat)];
-  if (ex) { ex.qty++; ex.t = now; } else { const nb = {term:t, qty:1, t:now, o:now}; if (state.cat === 'drug') nb.cat = 'drug'; state.basket.push(nb); }
+  if (ex) { ex.qty++; ex.t = now; } else { const nb = {term:t, qty:1, t:now, o:now}; if (state.cat !== 'food') nb.cat = state.cat; state.basket.push(nb); }
   state.q = ''; $('#q').value = ''; reset(); renderAll();
 }
 function addPicked(){
@@ -1316,7 +1323,7 @@ function addPicked(){
     const term = it.title.replace(/\s+/g,' ').trim(), k = bk(term, state.cat);
     delete state.tomb[k];
     const ex = state.basket.find(b => bk(b.term, bcat(b)) === k);
-    if (ex) { ex.qty++; ex.t = now; } else { const nb = {term, qty:1, t:now, o:now + n}; if (state.cat === 'drug') nb.cat = 'drug'; state.basket.push(nb); }
+    if (ex) { ex.qty++; ex.t = now; } else { const nb = {term, qty:1, t:now, o:now + n}; if (state.cat !== 'food') nb.cat = state.cat; state.basket.push(nb); }
     n++;
   });
   state.sug = new Set(); state.q = ''; $('#q').value = ''; reset(); renderAll();
@@ -1433,14 +1440,14 @@ const SHARE = {code:null, rev:null, dirty:false, ver:0, busy:false, status:'', d
 function setDone(k, v){ state.doneMap[k] = {v:!!v, t:Date.now()}; v ? state.done.add(k) : state.done.delete(k); save(); markDirty(); }
 function toDoc(){
   const items = {};
-  state.basket.forEach(b => { items[bk(b.term, bcat(b))] = {term:b.term, qty:b.qty, grp:b.grp || null, cat:b.cat === 'drug' ? 'drug' : null, t:b.t || 1, o:b.o || 1}; });
+  state.basket.forEach(b => { items[bk(b.term, bcat(b))] = {term:b.term, qty:b.qty, grp:b.grp || null, cat:catKey(b.cat) === 'food' ? null : catKey(b.cat), t:b.t || 1, o:b.o || 1}; });
   Object.keys(state.tomb).forEach(k => { const t = state.tomb[k]; if (!items[k] || items[k].t < t) items[k] = {term:k, qty:1, grp:null, t, o:0, del:true}; });
   return {items, done:Object.assign({}, state.doneMap), cfg:{t:state.cfgT || 0, v:{home:state.home, mode:state.mode, rad:state.rad, max:state.max, cards:state.cards, fmt:state.fmt, pick:state.pick}}, last:{t:state.lastT || 0, v:state.last}};
 }
 function applyDoc(remote){
   const doc = mergeDocs(toDoc(), remote);
   const live = Object.keys(doc.items).filter(k => !doc.items[k].del).sort((x, y) => (doc.items[x].o - doc.items[y].o) || (x < y ? -1 : 1));
-  state.basket = live.map(k => { const v = doc.items[k], b = {term:v.term, qty:v.qty, t:v.t, o:v.o}; if (v.grp) b.grp = v.grp; if (v.cat === 'drug' || k.startsWith('d~')) b.cat = 'drug'; return b; });
+  state.basket = live.map(k => { const v = doc.items[k], b = {term:v.term, qty:v.qty, t:v.t, o:v.o}; if (v.grp) b.grp = v.grp; if (v.cat === 'drug' || k.startsWith('d~')) b.cat = 'drug'; else if (v.cat === 'elec' || k.startsWith('e~')) b.cat = 'elec'; return b; });
   state.tomb = {}; Object.keys(doc.items).forEach(k => { if (doc.items[k].del) state.tomb[k] = doc.items[k].t; });
   state.doneMap = doc.done || {};
   state.done = new Set(Object.keys(state.doneMap).filter(k => state.doneMap[k].v));
@@ -1588,7 +1595,7 @@ async function logout(){
   resetLocal(); try { localStorage.removeItem('nsr_uid'); localStorage.removeItem('nsr_user'); sessionStorage.removeItem('nsr_alive'); } catch(e){}
   showLanding();
 }
-let dataLoaded = false, DATA_DRUG = {items:[], updated:null, sources:{}};
+let dataLoaded = false, DATA_DRUG = {items:[], updated:null, sources:{}}, DATA_ELEK = {items:[], updated:null, sources:{}};
 async function loadData(){
   if (dataLoaded) return; dataLoaded = true;
   const get1 = u => fetch(u + '?v=' + Date.now()).then(r => r.ok ? r.json() : Promise.reject(r.status));
@@ -1596,6 +1603,7 @@ async function loadData(){
   try { DATA = await get('data.json'); } catch(e){ DATA = {items:[], updated:null, sources:{}}; $('#datanote').textContent = 'Akce se zatím nepodařilo načíst. Data se stahují jednou denně.'; dataLoaded = false; }
   try { STORES_ALL = (await get('stores.json')).stores || []; } catch(e){ STORES_ALL = []; }
   try { DATA_DRUG = await get('data_drug.json'); } catch(e){ DATA_DRUG = {items:[], updated:null, sources:{}}; }
+  try { DATA_ELEK = await get('data_elektro.json'); } catch(e){ DATA_ELEK = {items:[], updated:null, sources:{}}; }
   renderAll();
   try { fetch('cron/auto.php', {cache:'no-store'}).catch(()=>{}); } catch(e){}   // server si sám obnoví data, když jsou stará
 }

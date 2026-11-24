@@ -34,7 +34,7 @@ if ($a === 'save' && $method === 'POST') {
     foreach ((array)($in['favs'] ?? []) as $f) {
         if (!is_array($f)) continue;
         $t = trim(mb_substr((string)($f['term'] ?? ''), 0, 60));
-        $c = ($f['cat'] ?? '') === 'drug' ? 'drug' : 'food';
+        $c = in_array(($f['cat'] ?? ''), ['drug', 'elec'], true) ? $f['cat'] : 'food';
         $k = $c . '|' . mb_strtolower($t);
         if ($t === '' || isset($seen[$k])) continue;
         $seen[$k] = 1; $favs[] = ['term' => $t, 'cat' => $c];
