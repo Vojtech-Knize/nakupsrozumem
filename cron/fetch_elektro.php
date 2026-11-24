@@ -8,6 +8,8 @@
  */
 require_once __DIR__ . '/fetch_drug.php';   // http_get_multi, drug_num, drug_text, logmsg, UA, CRON_KEY
 
+define('ELEK_CAT_FROM', isset($_GET['c1']) ? max(1, (int) $_GET['c1']) : 1);
+define('ELEK_CAT_TO', isset($_GET['c2']) ? min(60, (int) $_GET['c2']) : 60);
 define('ELEK_MAXP', isset($_GET['maxp']) ? max(1, (int) $_GET['maxp']) : 9999);
 const MIN_ITEMS_ELEK = ['datart' => 40, 'planeo' => 20];
 const DATART_BASE = 'https://www.datart.cz/black-friday-%02d';   // kampaň Black Friday po kategoriích; po skončení se doplní další kampaň
@@ -28,9 +30,9 @@ function elek_validity(?string $html): array {
 
 function fetch_datart(): array {
     $items = []; $seen = [];
-    $miss = 0; $maxcat = min(60, ELEK_MAXP < 9999 ? ELEK_MAXP : 60); $maxp = min(40, ELEK_MAXP);
+    $miss = 0; $maxcat = ELEK_MAXP < 9999 ? min(ELEK_CAT_TO, ELEK_MAXP) : ELEK_CAT_TO; $maxp = min(40, ELEK_MAXP);
     // Kampaňové stránky Black Friday: black-friday-01, -02, ... (každá kategorie zboží zvlášť); konec po 3 chybějících za sebou
-    for ($c = 1; $c <= $maxcat && $miss < 3; $c++) {
+    for ($c = ELEK_CAT_FROM; $c <= $maxcat && $miss < 3; $c++) {
         $base = sprintf(DATART_BASE, $c);
         $from = date('Y-m-d'); $to = date('Y-m-d', strtotime('+3 days')); $got = false; $done = false;
         for ($p0 = 1; $p0 <= $maxp && !$done; $p0 += 3) {
@@ -137,6 +139,10 @@ function main_elektro(?string $only = null): int {
         if ($only !== null && $only !== $chain) { $keep(); if (isset($prev['sources'][$chain])) $res['sources'][$chain] = $prev['sources'][$chain]; continue; }
         try {
             $items = $fn();
+            if ($chain === 'datart' && isset($_GET['c1']) && $prev) {   // davka kategorii: doplnit k drivejsim polozkam
+                $ids = []; foreach ($items as $it) $ids[$it['id']] = true;
+                foreach ($prev['items'] ?? [] as $it) if (($it['chain'] ?? '') === 'datart' && empty($ids[$it['id']])) $items[] = $it;
+            }
             if (ELEK_MAXP < 9999) { logmsg("[$chain] test: " . count($items) . ' polozek; diagnostika: ' . json_encode($GLOBALS['elek_dbg'] ?? []) . '; priklad: ' . json_encode(array_slice($items, 0, 3), JSON_UNESCAPED_UNICODE)); continue; }
             if (count($items) < MIN_ITEMS_ELEK[$chain]) throw new RuntimeException('podezrele malo polozek: ' . count($items));
             $res['sources'][$chain] = ['ok' => true, 'count' => count($items), 'fetched' => date('c')];
