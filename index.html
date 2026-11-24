@@ -70,6 +70,16 @@ h2{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:1.25rem
 
 .add{display:flex;gap:8px}
 .add input{flex:1;min-width:0;height:3.2rem;border:2px solid var(--ink);border-radius:12px;padding:0 .8rem;font:inherit;background:var(--card);color:var(--ink)}
+.add .mic{width:3.2rem;padding:0;font-size:1.4rem;background:transparent;color:inherit;border:2px solid var(--ink)}
+.add .mic[hidden]{display:none}
+.add .mic.on{background:var(--ink);color:var(--card)}
+.favbox{margin-top:.8rem}
+.favbox h3{margin:0 0 .4rem;font-size:1rem}
+.favrow{display:flex;gap:6px;margin:.3rem 0}
+.favrow .fav{flex:1;min-height:2.8rem;text-align:left;padding:.3rem .8rem;border:2px solid var(--line);border-radius:12px;background:var(--card);color:inherit;font:inherit}
+.favrow .fav.hit{border-color:var(--ink);font-weight:700}
+.favrow .fav small{display:block;font-weight:400;color:var(--muted)}
+.favrow .favx{width:2.8rem;border:2px solid var(--line);border-radius:12px;background:transparent;color:inherit;font-size:1.1rem}
 .add button{height:3.2rem;padding:0 1rem;border:0;border-radius:12px;background:var(--ink);color:var(--card);font-weight:800}
 .sug{display:flex;flex-wrap:wrap;gap:8px;margin:.7rem 0 0}
 .chip{min-height:2.6rem;padding:.25rem .9rem;border:2px solid var(--line);border-radius:999px;background:var(--card);font-weight:600}
@@ -353,8 +363,10 @@ details.more summary{cursor:pointer;font-weight:800;min-height:3rem;display:flex
         <h2 id="h-list"><span class="n">1</span>Co potřebujete koupit?</h2>
         <form class="add" id="addform" autocomplete="off">
           <input id="q" type="text" inputmode="search" enterkeyhint="search" placeholder="Např. mléko, jogurt, prací gel…" aria-label="Název zboží">
+          <button type="button" id="mic" class="mic" aria-label="Diktovat hledané zboží" hidden>🎤</button>
           <button type="submit">Hledat</button>
         </form>
+        <div id="favbox"></div>
         <div id="chainfilter" class="chainfilter"></div>
         <div id="suggest"></div>
         <div id="lastbox"></div>
@@ -836,7 +848,7 @@ const state = {
   home: null,            // {lat, lon, label}
   sug:new Set(), cat:'food', mode:'car', rad:{foot:3000,bus:6000,car:30000}, chain:null, chs:{food:[],drug:[]}, sort:'price', max:2, cards:false, fmt:'all', sel:null, q:'', size:'m',
   done:new Set(), copied:null, copyText:'',
-  tomb:{}, doneMap:{}, cfgT:0, pick:null,   // podklady pro společný seznam
+  favs:[], tomb:{}, doneMap:{}, cfgT:0, pick:null,   // favs = hlídané věci [{term,cat}]; podklady pro společný seznam
   last:null, lastT:0, lastOpen:false, lastOff:new Set()   // poslední nákup
 };
 let DATA = {items:[], updated:null, sources:{}};
@@ -844,7 +856,7 @@ let STORES_ALL = [];
 let lastSel = null;
 
 /* ---- ukládání ---- */
-const KEYS = ['basket','home','cat','chs','sort','mode','rad','max','cards','fmt','size','tomb','doneMap','cfgT','pick','last','lastT'];
+const KEYS = ['basket','home','cat','chs','sort','mode','rad','max','cards','fmt','size','favs','tomb','doneMap','cfgT','pick','last','lastT'];
 function save(){ try { const o = {}; KEYS.forEach(k => o[k] = state[k]); localStorage.setItem('nsr1', JSON.stringify(o)); } catch(e){} }
 function load(){
   try {
@@ -857,7 +869,7 @@ function load(){
 }
 function resetLocal(){
   try { localStorage.removeItem('nsr1'); } catch(e){}
-  Object.assign(state, {basket:[], home:null, tomb:{}, doneMap:{}, cfgT:0, pick:null, sel:null, done:new Set(), copied:null, last:null, lastT:0, lastOpen:false, lastOff:new Set()});
+  Object.assign(state, {basket:[], favs:[], home:null, tomb:{}, doneMap:{}, cfgT:0, pick:null, sel:null, done:new Set(), copied:null, last:null, lastT:0, lastOpen:false, lastOff:new Set()});
 }
 const RAD_OPTS = {foot:[500,1000,1500,2000,3000,5000], bus:[1000,2000,3000,5000,8000,10000,15000], car:[5000,10000,15000,20000,30000]};
 const kmTxt = m => (m % 1000 ? (m / 1000).toString().replace('.', ',') : m / 1000) + ' km';
@@ -1065,13 +1077,27 @@ function renderSuggest(){
       }
     }
   }
-  if (!m.length) { el.innerHTML = `<p class="sugnote">Nic v akci jsme nenašli. Zkuste jiné slovo, např. v jednotném čísle.</p><button type="button" class="addbig" data-act="addterm">Přidat „${esc(q)}“ do seznamu</button>` + (pickedExtra().all ? pickedExtra().html + pickBtn(pickedExtra().all) : ''); return; }
+  if (!m.length) { el.innerHTML = `<p class="sugnote">Nic v akci jsme nenašli. Zkuste jiné slovo, např. v jednotném čísle.</p><button type="button" class="addbig" data-act="addterm">Přidat „${esc(q)}“ do seznamu</button>` + favBtn(q) + (pickedExtra().all ? pickedExtra().html + pickBtn(pickedExtra().all) : ''); return; }
   const shown = sortOffers(m, state.sort, state.cards).slice(0,30), relShown = sortOffers(relM, state.sort, state.cards).slice(0,15);
   const rows = shown.map(sugRow).join('');
   const pe = pickedExtra(new Set([...shown, ...relShown].map(i => i.id))), n = pe.all;
   const more = m.length > shown.length ? ` Zobrazeno ${shown.length} nabídek podle zvoleného řazení.` : '';
   const rc = reachableChains(), note = rc ? ' Jen z řetězců, které mají prodejnu ve vašem dosahu.' : '';
-  el.innerHTML = `<p class="sugnote">Nalezeno ${m.length} akčních nabídek${g ? ' (' + GROUP_NAME[g].toLowerCase() + ')' : ''}.${more}${note} Zaškrtněte, co chcete koupit:${others ? '<br>Našli jsme i další druh zboží: ' + esc(others) + '. Po přidání do seznamu můžete přepnout.' : ''}</p>${sortSel()}<ul class="matches">${rows}</ul>${relShown.length ? `<details class="relbox"${state.relOpen ? ' open' : ''}><summary>Související zboží (${relM.length}), např. příchutě a jiné druhy</summary><ul class="matches">${relShown.map(sugRow).join('')}</ul></details>` : ''}${pe.html}<button type="button" class="addbig" data-act="addpicked"${n ? '' : ' disabled'}>Přidat vybrané do seznamu${n ? ' (' + n + ')' : ''}</button><button type="button" class="addbig alt" data-act="addterm">Nebo přidat obecně „${esc(q)}“</button>`;
+  el.innerHTML = `<p class="sugnote">Nalezeno ${m.length} akčních nabídek${g ? ' (' + GROUP_NAME[g].toLowerCase() + ')' : ''}.${more}${note} Zaškrtněte, co chcete koupit:${others ? '<br>Našli jsme i další druh zboží: ' + esc(others) + '. Po přidání do seznamu můžete přepnout.' : ''}</p>${sortSel()}<ul class="matches">${rows}</ul>${relShown.length ? `<details class="relbox"${state.relOpen ? ' open' : ''}><summary>Související zboží (${relM.length}), např. příchutě a jiné druhy</summary><ul class="matches">${relShown.map(sugRow).join('')}</ul></details>` : ''}${pe.html}<button type="button" class="addbig" data-act="addpicked"${n ? '' : ' disabled'}>Přidat vybrané do seznamu${n ? ' (' + n + ')' : ''}</button><button type="button" class="addbig alt" data-act="addterm">Nebo přidat obecně „${esc(q)}“</button>${favBtn(q)}`;
+}
+function favHas(t){ return state.favs.some(f => f.cat === state.cat && bk(f.term, f.cat) === bk(t, state.cat)); }
+function favBtn(q){ return favHas(q) ? '' : `<button type="button" class="addbig alt" data-act="favadd">☆ Hlídat „${esc(q)}“ (ukážu, až bude v akci)</button>`; }
+function renderFavs(){
+  const el = $('#favbox'); if (!el) return;
+  const mine = state.favs.map((f, i) => ({f, i})).filter(x => x.f.cat === state.cat);
+  if (!mine.length) { el.className = ''; el.innerHTML = ''; return; }
+  const all = activeAll();
+  el.className = 'favbox';
+  el.innerHTML = '<h3>Hlídané věci</h3>' + mine.map(({f, i}) => {
+    const m = matchItems(all, f.term), pr = m.map(x => x.price).filter(p => p > 0);
+    const info = m.length ? `${m.length} ${m.length === 1 ? 'akce' : (m.length < 5 ? 'akce' : 'akcí')} od ${fmtKc(Math.min(...pr))}` : 'teď není v akci';
+    return `<div class="favrow"><button type="button" class="fav${m.length ? ' hit' : ''}" data-act="favgo" data-i="${i}">${m.length ? '⭐ ' : '☆ '}${esc(f.term)}<small>${info}</small></button><button type="button" class="favx" data-act="favrm" data-i="${i}" aria-label="Přestat hlídat ${esc(f.term)}">✕</button></div>`;
+  }).join('');
 }
 function renderHome(){
   const el = $('#homebox');
@@ -1224,7 +1250,7 @@ function renderPlan(){
   el.innerHTML = verdict + hint + noneHTML + opts + map + `<section class="out2">${steps}</section>` + totals;
 }
 
-function renderAll(){ renderBasket(); renderLast(); renderChainFilter(); renderSuggest(); renderHome(); updateControls(); renderPlan(); }
+function renderAll(){ renderFavs(); renderBasket(); renderLast(); renderChainFilter(); renderSuggest(); renderHome(); updateControls(); renderPlan(); }
 function reset(){ state.sel = null; state.copied = null; if (state.pick) { state.pick = null; touchCfg(); } save(); markDirty(); }
 
 /* ---- poloha ---- */
@@ -1271,6 +1297,21 @@ function addPicked(){
 }
 function bind(){
   $('#addform').addEventListener('submit', e => { e.preventDefault(); state.q = $('#q').value; renderSuggest(); });
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = $('#mic');
+  if (SR && mic) {
+    mic.hidden = false;
+    let rec = null;
+    mic.addEventListener('click', () => {
+      if (rec) { try { rec.stop(); } catch(e){} return; }
+      rec = new SR(); rec.lang = 'cs-CZ'; rec.interimResults = false; rec.maxAlternatives = 1;
+      mic.classList.add('on'); mic.setAttribute('aria-pressed', 'true');
+      const end = () => { rec = null; mic.classList.remove('on'); mic.setAttribute('aria-pressed', 'false'); };
+      rec.onresult = ev => { const t = (ev.results[0] && ev.results[0][0] && ev.results[0][0].transcript || '').replace(/[.!?]+$/, '').trim(); if (t) { state.q = t; $('#q').value = t; renderSuggest(); } };
+      rec.onerror = ev => { if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') toast('Diktování je zakázané. Povolte v telefonu mikrofon pro tento prohlížeč.'); else if (ev.error !== 'aborted' && ev.error !== 'no-speech') toast('Diktování se nepovedlo, zkuste to znovu.'); };
+      rec.onend = end;
+      try { rec.start(); } catch(e) { end(); }
+    });
+  }
   $('#q').addEventListener('input', e => { state.q = e.target.value; renderSuggest(); });
   // po kliknutí do pole se předchozí hledání smaže (zaškrtnuté položky zůstávají)
   $('#q').addEventListener('focus', e => {
@@ -1288,6 +1329,9 @@ function bind(){
       else { const l = state.chs[state.cat] || [], k = l.indexOf(v); if (k >= 0) l.splice(k, 1); else l.push(v); state.chs[state.cat] = l; }
       reset(); return renderAll();
     }
+    if (a === 'favadd') { const t = state.q.trim(); if (t && !favHas(t)) { state.favs.push({term:t, cat:state.cat}); save(); toast('Budu hlídat: ' + t); } renderFavs(); return renderSuggest(); }
+    if (a === 'favrm') { state.favs.splice(i, 1); save(); return renderFavs(); }
+    if (a === 'favgo') { const f = state.favs[i]; if (f) { state.q = f.term; $('#q').value = f.term; renderSuggest(); $('#suggest').scrollIntoView({behavior:'smooth', block:'start'}); } return; }
     if (a === 'addterm') return addTerm();
     if (a === 'addpicked') return addPicked();
     if (a === 'sugpick') { if (b.checked) state.sug.add(b.dataset.id); else state.sug.delete(b.dataset.id); return renderSuggest(); }
