@@ -9,7 +9,7 @@
 require_once __DIR__ . '/fetch_drug.php';   // http_get_multi, drug_num, drug_text, logmsg, UA, CRON_KEY
 
 define('ELEK_MAXP', isset($_GET['maxp']) ? max(1, (int) $_GET['maxp']) : 9999);
-const MIN_ITEMS_ELEK = ['datart' => 200, 'planeo' => 20];
+const MIN_ITEMS_ELEK = ['datart' => 40, 'planeo' => 20];
 const DATART_URL = 'https://www.datart.cz/vyprodej-poslednich-kusu.html';
 const PLANEO_PAGES = ['https://www.planeo.cz/black-off'];   // kampaňové stránky; po skončení akce se doplní nová
 const ELEK_USED_RE = '/zanovn|zánovn|rozbalen|bazar|použit|pouzit/iu';
@@ -49,7 +49,7 @@ function fetch_datart(): array {
                 $id = (string) $j['item_id'];
                 if (isset($seen[$id])) continue;
                 $title = trim((string) ($j['item_name'] ?? ''));
-                if ($title === '' || preg_match(ELEK_USED_RE, $title . ' ' . ($j['item_labels'] ?? ''))) { $GLOBALS['elek_dbg']['used'] = ($GLOBALS['elek_dbg']['used'] ?? 0) + 1; continue; }
+                if ($title === '' || preg_match(ELEK_USED_RE, $title . ' ' . ($j['item_labels'] ?? ''))) { $GLOBALS['elek_dbg']['used'] = ($GLOBALS['elek_dbg']['used'] ?? 0) + 1; if (($GLOBALS['elek_dbg']['used']) <= 4) $GLOBALS['elek_dbg']['vzorek'][] = mb_substr($title, 0, 60) . ' | ' . json_encode($j['item_labels'] ?? null, JSON_UNESCAPED_UNICODE); continue; }
                 if (!preg_match('~<a href="(/[^"]+)"~', $t, $mh) || str_starts_with($mh[1], '/bazar/')) continue;
                 $final = preg_match('~data-qa="actual-price"[^>]*>(.*?)</div>~s', $t, $mf) ? drug_num(drug_text($mf[1])) : null;
                 if (!$final) $final = isset($j['price']) ? (float) $j['price'] : null;
