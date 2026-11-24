@@ -65,6 +65,7 @@ if ($a === 'delete') {
     if (!password_verify((string)($in['password'] ?? ''), $u['pass'])) out(['error' => 'login', 'message' => 'Heslo nesedí.'], 401);
     db()->prepare('DELETE FROM sessions WHERE user_id=?')->execute([$u['id']]);
     db()->prepare('DELETE FROM activity WHERE user_id=?')->execute([$u['id']]);
+    db()->prepare('DELETE FROM watch WHERE user_id=?')->execute([$u['id']]);
     db()->prepare('DELETE FROM users WHERE id=?')->execute([$u['id']]);
     set_cookie('', time() - 3600);
     out(['ok' => true]);

@@ -74,6 +74,13 @@ h2{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:1.25rem
 .add .mic[hidden]{display:none}
 .add .mic.on{background:var(--ink);color:var(--card)}
 .favbox{margin-top:.8rem}
+.topbtn{width:100%;min-height:3rem;margin-top:.7rem;border:2px solid var(--ink);border-radius:12px;background:transparent;color:inherit;font:inherit;font-weight:700}
+.topbtn[aria-pressed=true]{background:var(--ink);color:var(--card)}
+.soon{display:inline-block;margin-left:.4rem;padding:.05rem .5rem;border-radius:999px;background:#b3261e;color:#fff;font-size:.8rem;font-weight:700;white-space:nowrap}
+.pct{margin-right:.5rem;font-weight:800;color:#b3261e;white-space:nowrap}
+.navbtn{display:inline-block;margin:.5rem 0 0;padding:.55rem .9rem;border:2px solid var(--ink);border-radius:12px;color:inherit;font-weight:700;text-decoration:none}
+.digest{display:flex;gap:.6rem;align-items:flex-start;margin:.6rem 0 0;font-size:.95rem}
+.digest input{width:1.4rem;height:1.4rem;margin-top:.15rem;flex:none}
 .favbox h3{margin:0 0 .4rem;font-size:1rem}
 .favrow{display:flex;gap:6px;margin:.3rem 0}
 .favrow .fav{flex:1;min-height:2.8rem;text-align:left;padding:.3rem .8rem;border:2px solid var(--line);border-radius:12px;background:var(--card);color:inherit;font:inherit}
@@ -366,6 +373,7 @@ details.more summary{cursor:pointer;font-weight:800;min-height:3rem;display:flex
           <button type="button" id="mic" class="mic" aria-label="Diktovat hledané zboží" hidden>🎤</button>
           <button type="submit">Hledat</button>
         </form>
+        <button type="button" class="topbtn" data-act="top" aria-pressed="false">🔥 Největší slevy týdne</button>
         <div id="favbox"></div>
         <div id="chainfilter" class="chainfilter"></div>
         <div id="suggest"></div>
@@ -848,7 +856,7 @@ const state = {
   home: null,            // {lat, lon, label}
   sug:new Set(), cat:'food', mode:'car', rad:{foot:3000,bus:6000,car:30000}, chain:null, chs:{food:[],drug:[]}, sort:'price', max:2, cards:false, fmt:'all', sel:null, q:'', size:'m',
   done:new Set(), copied:null, copyText:'',
-  favs:[], tomb:{}, doneMap:{}, cfgT:0, pick:null,   // favs = hlídané věci [{term,cat}]; podklady pro společný seznam
+  favs:[], digest:false, top:false, tomb:{}, doneMap:{}, cfgT:0, pick:null,   // favs = hlídané věci [{term,cat}]; podklady pro společný seznam
   last:null, lastT:0, lastOpen:false, lastOff:new Set()   // poslední nákup
 };
 let DATA = {items:[], updated:null, sources:{}};
@@ -856,7 +864,7 @@ let STORES_ALL = [];
 let lastSel = null;
 
 /* ---- ukládání ---- */
-const KEYS = ['basket','home','cat','chs','sort','mode','rad','max','cards','fmt','size','favs','tomb','doneMap','cfgT','pick','last','lastT'];
+const KEYS = ['basket','home','cat','chs','sort','mode','rad','max','cards','fmt','size','favs','digest','tomb','doneMap','cfgT','pick','last','lastT'];
 function save(){ try { const o = {}; KEYS.forEach(k => o[k] = state[k]); localStorage.setItem('nsr1', JSON.stringify(o)); } catch(e){} }
 function load(){
   try {
@@ -869,7 +877,7 @@ function load(){
 }
 function resetLocal(){
   try { localStorage.removeItem('nsr1'); } catch(e){}
-  Object.assign(state, {basket:[], favs:[], home:null, tomb:{}, doneMap:{}, cfgT:0, pick:null, sel:null, done:new Set(), copied:null, last:null, lastT:0, lastOpen:false, lastOff:new Set()});
+  Object.assign(state, {basket:[], favs:[], digest:false, top:false, home:null, tomb:{}, doneMap:{}, cfgT:0, pick:null, sel:null, done:new Set(), copied:null, last:null, lastT:0, lastOpen:false, lastOff:new Set()});
 }
 const RAD_OPTS = {foot:[500,1000,1500,2000,3000,5000], bus:[1000,2000,3000,5000,8000,10000,15000], car:[5000,10000,15000,20000,30000]};
 const kmTxt = m => (m % 1000 ? (m / 1000).toString().replace('.', ',') : m / 1000) + ' km';
@@ -920,7 +928,7 @@ function nearbyStores(all){
     if (!cc.includes(s.chain) || (cs && !cs.has(s.chain))) return;
     if (Math.abs(s.lat - h.lat) > 0.29 || Math.abs(s.lon - h.lon) > 0.46) return;
     const xy = toXY(h, s.lat, s.lon);
-    out.push({id:s.chain + i, chain:s.chain, name:s.name, kind:s.kind, addr:[s.addr, s.city].filter(Boolean).join(', '), x:xy.x, y:xy.y});
+    out.push({id:s.chain + i, chain:s.chain, lat:s.lat, lon:s.lon, name:s.name, kind:s.kind, addr:[s.addr, s.city].filter(Boolean).join(', '), x:xy.x, y:xy.y});
   });
   return out;
 }
@@ -1025,9 +1033,17 @@ function renderBasket(){
       <button type="button" class="rm" data-act="rm" data-i="${i}">Odebrat</button>${chips}</li>`;
   }).join('') + '<li class="finish"><button type="button" class="btn" data-act="finish">Nákup hotový: uložit a vyprázdnit seznam</button> <button type="button" class="btn danger" data-act="clearplan">Vymazat plán</button></li>';
 }
+function addDays(iso, n){ const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function soonTag(it){
+  if (!it || !it.validTo) return '';
+  const t = todayIso();
+  if (it.validTo === t) return '<span class="soon">končí dnes</span>';
+  if (it.validTo === addDays(t, 1)) return '<span class="soon">končí zítra</span>';
+  return '';
+}
 const sugRow = it => {
   const on = state.sug.has(it.id);
-  return `<li class="${on ? 'on' : ''}"><label class="mi"><input type="checkbox" data-act="sugpick" data-id="${esc(it.id)}"${on ? ' checked' : ''}>${thumb(it)}<span><span class="ch">${esc(CHAIN_NAME[it.chain]||it.chain)}</span>${esc(it.title)}${it.subtitle ? ', ' + esc(it.subtitle) : ''}</span></label><span class="pr">${fmtKc(it.price)}</span></li>`;
+  return `<li class="${on ? 'on' : ''}"><label class="mi"><input type="checkbox" data-act="sugpick" data-id="${esc(it.id)}"${on ? ' checked' : ''}>${thumb(it)}<span><span class="ch">${esc(CHAIN_NAME[it.chain]||it.chain)}</span>${esc(it.title)}${it.subtitle ? ', ' + esc(it.subtitle) : ''}${soonTag(it)}</span></label><span class="pr">${fmtKc(it.price)}</span></li>`;
 };
 function renderChainFilter(){
   const el = $('#chainfilter'); if (!el) return;
@@ -1050,9 +1066,18 @@ function pickedExtra(exclude){
   return {all: all.length, html: rest.length ? `<p class="sugnote">Dříve zaškrtnuto:</p><ul class="matches">${rest.map(sugRow).join('')}</ul>` : ''};
 }
 function pickBtn(n){ return `<button type="button" class="addbig" data-act="addpicked"${n ? '' : ' disabled'}>Přidat vybrané do seznamu${n ? ' (' + n + ')' : ''}</button>`; }
+function renderTop(el, cs){
+  const csName = cs ? [...cs].map(c => CHAIN_NAME[c] || c).join(', ') : '';
+  const list = activeItems().filter(i => i.price > 0 && i.oldPrice > i.price).map(i => ({i, pct: Math.round((1 - i.price / i.oldPrice) * 100)})).filter(x => x.pct >= 10 && x.pct < 95).sort((a, b) => b.pct - a.pct || a.i.price - b.i.price).slice(0, 25);
+  const pe = pickedExtra(new Set(list.map(x => x.i.id)));
+  if (!list.length) { el.innerHTML = '<p class="sugnote">Teď tu nemáme žádné výrazné slevy' + (csName ? ' u vybraných obchodů (' + esc(csName) + ')' : '') + '.</p>' + pe.html + (pe.all ? pickBtn(pe.all) : ''); return; }
+  const rows = list.map(x => sugRow(x.i).replace('<span class="pr">', '<span class="pr"><span class="pct">−' + x.pct + NBSP + '%</span>')).join('');
+  el.innerHTML = `<p class="sugnote">Největší slevy oproti běžné ceně${csName ? ' (' + esc(csName) + ')' : ''}. Zaškrtněte, co chcete koupit:</p><ul class="matches">${rows}</ul>${pe.html}${pickBtn(pe.all)}`;
+}
 function renderSuggest(){
   const el = $('#suggest'), q = state.q.trim();
   const cs = chSel();
+  if (!q && state.top) return renderTop(el, cs);
   if (!q && !cs) { const pe = pickedExtra(); el.innerHTML = pe.all ? pe.html + pickBtn(pe.all) : ''; return; }
   const csName = cs ? [...cs].map(c => CHAIN_NAME[c] || c).join(', ') : '';
   if (!q) {   // jen vybrané obchody bez hledaného slova: procházení jejich akcí
@@ -1097,7 +1122,7 @@ function renderFavs(){
     const m = matchItems(all, f.term), pr = m.map(x => x.price).filter(p => p > 0);
     const info = m.length ? `${m.length} ${m.length === 1 ? 'akce' : (m.length < 5 ? 'akce' : 'akcí')} od ${fmtKc(Math.min(...pr))}` : 'teď není v akci';
     return `<div class="favrow"><button type="button" class="fav${m.length ? ' hit' : ''}" data-act="favgo" data-i="${i}">${m.length ? '⭐ ' : '☆ '}${esc(f.term)}<small>${info}</small></button><button type="button" class="favx" data-act="favrm" data-i="${i}" aria-label="Přestat hlídat ${esc(f.term)}">✕</button></div>`;
-  }).join('');
+  }).join('') + (AUTH.user ? `<label class="digest"><input type="checkbox" data-act="digest"${state.digest ? ' checked' : ''}><span>Posílat mi jednou týdně e-mailem hlídané věci, které jsou v akci (na ${esc(AUTH.user.email)})</span></label>` : '');
 }
 function renderHome(){
   const el = $('#homebox');
@@ -1110,6 +1135,7 @@ function updateControls(){
   document.querySelectorAll('[data-act="cat"]').forEach(b => { const on = b.dataset.v === state.cat; b.setAttribute('aria-selected', on); b.setAttribute('aria-pressed', on); });
   const qi = $('#q'); if (qi) qi.placeholder = state.cat === 'drug' ? 'Např. zubní pasta, prášek, šampon' : 'Např. mléko, jogurt, pračka';
   document.querySelectorAll('[data-act="fmt"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.fmt));
+  document.querySelectorAll('[data-act="top"]').forEach(b => b.setAttribute('aria-pressed', state.top ? 'true' : 'false'));
   document.querySelectorAll('[data-act="size"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.size));
   const sw = document.querySelector('[data-act="cards"]'); sw.setAttribute('aria-checked', state.cards);
   document.documentElement.dataset.size = state.size;
@@ -1176,11 +1202,12 @@ function itemHTML(it, store){
   return `<li class="item${state.done.has(key) ? ' done' : ''}">
     <label><input type="checkbox" data-pid="${esc(key)}"${state.done.has(key) ? ' checked' : ''}>${thumb(o.item)}<span class="nm">${esc(o.item.title)}${o.item.subtitle ? ', ' + esc(o.item.subtitle) : ''}${it.qty > 1 ? ' × ' + it.qty : ''}</span></label>
     <div class="pp">${o.pct > 0 ? `<span class="deal">Akce −${o.pct}${NBSP}%</span>` : ''}<span class="now">${fmtKc(line)}</span>${o.pct > 0 ? `<span class="was">${fmtKc(o.regular*it.qty)}</span>` : ''}${it.qty > 1 ? `<span class="unit">${it.qty} × ${fmtKc(o.price)}</span>` : ''}</div>
-    <div class="note">${esc(note)}</div></li>`;
+    <div class="note">${esc(note)}${soonTag(o.item)}</div></li>`;
 }
 function stopHTML(s, i, mode){
   const from = i === 0 ? 'Od domova' : 'Od předchozího obchodu';
-  return `<li class="stop"><div class="sh"><span class="no">${i+1}</span><div><h3>${esc(s.store.name)}<span class="kind">${esc(s.store.kind)}</span></h3><p>${s.store.addr ? esc(s.store.addr) + ' · ' : ''}${from} ${fmtDist(s.legM)} · asi ${s.legMin}${NBSP}min (${MODES[mode].verb})</p></div></div>
+  const nav = (s.store.lat != null && s.store.lon != null) ? `<a class="navbtn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.store.lat},${s.store.lon}&travelmode=${{foot:'walking', bus:'transit', car:'driving'}[mode] || 'driving'}">🧭 Navigovat</a>` : '';
+  return `<li class="stop"><div class="sh"><span class="no">${i+1}</span><div><h3>${esc(s.store.name)}<span class="kind">${esc(s.store.kind)}</span></h3><p>${s.store.addr ? esc(s.store.addr) + ' · ' : ''}${from} ${fmtDist(s.legM)} · asi ${s.legMin}${NBSP}min (${MODES[mode].verb})</p>${nav}</div></div>
     <ul class="items">${s.items.map(it => itemHTML(it, s.store)).join('')}</ul>
     <div class="sub"><span>Za tento obchod</span><span>${fmtKc(s.subtotal)}</span></div></li>`;
 }
@@ -1296,7 +1323,7 @@ function addPicked(){
   if (n) toast('Přidáno do seznamu: ' + n + NBSP + plural(n) + '.');
 }
 function bind(){
-  $('#addform').addEventListener('submit', e => { e.preventDefault(); state.q = $('#q').value; renderSuggest(); });
+  $('#addform').addEventListener('submit', e => { e.preventDefault(); state.q = $('#q').value; if (state.q.trim()) state.top = false; updateControls(); renderSuggest(); });
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = $('#mic');
   if (SR && mic) {
     mic.hidden = false;
@@ -1312,7 +1339,7 @@ function bind(){
       try { rec.start(); } catch(e) { end(); }
     });
   }
-  $('#q').addEventListener('input', e => { state.q = e.target.value; renderSuggest(); });
+  $('#q').addEventListener('input', e => { state.q = e.target.value; if (state.q.trim() && state.top) { state.top = false; updateControls(); } renderSuggest(); });
   // po kliknutí do pole se předchozí hledání smaže (zaškrtnuté položky zůstávají)
   $('#q').addEventListener('focus', e => {
     if (!e.target.value && !state.q) return;
@@ -1329,9 +1356,11 @@ function bind(){
       else { const l = state.chs[state.cat] || [], k = l.indexOf(v); if (k >= 0) l.splice(k, 1); else l.push(v); state.chs[state.cat] = l; }
       reset(); return renderAll();
     }
-    if (a === 'favadd') { const t = state.q.trim(); if (t && !favHas(t)) { state.favs.push({term:t, cat:state.cat}); save(); toast('Budu hlídat: ' + t); } renderFavs(); return renderSuggest(); }
-    if (a === 'favrm') { state.favs.splice(i, 1); save(); return renderFavs(); }
+    if (a === 'favadd') { const t = state.q.trim(); if (t && !favHas(t)) { state.favs.push({term:t, cat:state.cat}); save(); pushWatch(); toast('Budu hlídat: ' + t); } renderFavs(); return renderSuggest(); }
+    if (a === 'favrm') { state.favs.splice(i, 1); save(); pushWatch(); return renderFavs(); }
     if (a === 'favgo') { const f = state.favs[i]; if (f) { state.q = f.term; $('#q').value = f.term; renderSuggest(); $('#suggest').scrollIntoView({behavior:'smooth', block:'start'}); } return; }
+    if (a === 'top') { state.top = !state.top; if (state.top) { state.q = ''; $('#q').value = ''; } updateControls(); renderSuggest(); if (state.top) $('#suggest').scrollIntoView({behavior:'smooth', block:'start'}); return; }
+    if (a === 'digest') { state.digest = !!b.checked; save(); pushWatch(); toast(state.digest ? 'Zapnuto: jednou týdně vám pošleme e-mail, když bude něco z hlídaného v akci.' : 'Týdenní e-mail je vypnutý.'); return renderFavs(); }
     if (a === 'addterm') return addTerm();
     if (a === 'addpicked') return addPicked();
     if (a === 'sugpick') { if (b.checked) state.sug.add(b.dataset.id); else state.sug.delete(b.dataset.id); return renderSuggest(); }
@@ -1387,6 +1416,17 @@ async function call(url, body){
 const authApi = (a, body) => call('api/auth.php?a=' + a, body);
 const listApi = (a, body, code) => call('api/list.php?a=' + a + ((code || SHARE.code) ? '&code=' + (code || SHARE.code) : ''), body);
 const AUTH = {user:null};
+const watchApi = (a, body) => call('api/watch.php?a=' + a, body);
+async function pushWatch(){ if (!AUTH.user) return; try { await watchApi('save', {favs:state.favs, digest:state.digest}); } catch(e){} }
+async function pullWatch(){
+  if (!AUTH.user) return;
+  try {
+    const r = await watchApi('get');
+    if (r.exists) { state.favs = r.favs || []; state.digest = !!r.digest; save(); renderFavs(); }
+    else if (state.favs.length || state.digest) await pushWatch();
+  } catch(e){}
+  try { fetch('cron/digest.php', {cache:'no-store'}).catch(()=>{}); } catch(e){}   // server sám rozešle týdenní e-maily, když je čas
+}
 const SHARE = {code:null, rev:null, dirty:false, ver:0, busy:false, status:'', deb:null, timer:null, copied:false};
 
 /* ---- slučování se serverem ---- */
@@ -1586,6 +1626,7 @@ async function enterApp(user){
   try { const nb = document.getElementById('appshare-native'); if (nb && navigator.share) nb.hidden = false; } catch(e){}
   try { window.scrollTo(0,0); document.documentElement.scrollTop = 0; } catch(e){}
   try { await startSync(); } catch(e){ if (e.status === 401) sessionLost(); else { SHARE.status = 'err'; if (SHARE.code) startTimers(); renderSyncStatus(); } }
+  pullWatch();
 }
 function bindAuth(){
   $('#a-show').addEventListener('change', e => { $('#a-pass').type = e.target.checked ? 'text' : 'password'; });

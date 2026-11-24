@@ -33,7 +33,9 @@ function db(): PDO {
       CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
       CREATE TABLE IF NOT EXISTS activity(day TEXT NOT NULL, user_id INTEGER NOT NULL, PRIMARY KEY(day, user_id));
       CREATE TABLE IF NOT EXISTS attempts(k TEXT NOT NULL, t INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS attempts_k ON attempts(k, t);');
+      CREATE INDEX IF NOT EXISTS attempts_k ON attempts(k, t);
+      CREATE TABLE IF NOT EXISTS watch(
+        user_id INTEGER PRIMARY KEY, terms TEXT NOT NULL, digest INTEGER NOT NULL DEFAULT 0, last_sent INTEGER NOT NULL DEFAULT 0);');
     return $pdo;
 }
 
@@ -113,3 +115,11 @@ function note_attempt(array $keys): void {
     foreach ($keys as $k) db()->prepare('INSERT INTO attempts(k,t) VALUES(?,?)')->execute([$k, time()]);
     if (random_int(1, 30) === 1) db()->prepare('DELETE FROM attempts WHERE t<?')->execute([time() - 86400]);
 }
+
+/** Tajný klíč pro podpis odkazů (odhlášení z e-mailu); vznikne při prvním použití. */
+function secret_key(): string {
+    $f = DATA_DIR . '/secret.key';
+    if (!is_file($f)) { db(); @file_put_contents($f, bin2hex(random_bytes(32))); }
+    return (string) @file_get_contents($f);
+}
+function unsub_token(int $uid): string { return hash_hmac('sha256', 'unsub:' . $uid, secret_key()); }
