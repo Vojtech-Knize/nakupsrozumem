@@ -44,7 +44,7 @@ function normalize_stores(array $elements, ?string $force = null): array {
         $street = trim(($t['addr:street'] ?? ($t['addr:place'] ?? '')) . ' ' . ($t['addr:housenumber'] ?? ($t['addr:conscriptionnumber'] ?? '')));
         $out[] = [
             'chain' => $chain,
-            'name'  => ['kaufland' => 'Kaufland', 'penny' => 'Penny', 'lidl' => 'Lidl', 'billa' => 'Billa', 'globus' => 'Globus', 'albert' => 'Albert', 'norma' => 'Norma', 'coop' => 'Coop', 'terno' => 'Terno', 'dm' => 'dm', 'rossmann' => 'Rossmann', 'teta' => 'Teta'][$chain],
+            'name'  => ['kaufland' => 'Kaufland', 'penny' => 'Penny', 'lidl' => 'Lidl', 'billa' => 'Billa', 'globus' => 'Globus', 'albert' => 'Albert', 'norma' => 'Norma', 'coop' => 'Coop', 'terno' => 'Terno', 'dm' => 'dm', 'rossmann' => 'Rossmann', 'teta' => 'Teta', 'datart' => 'Datart', 'planeo' => 'Planeo'][$chain],
             'kind'  => (in_array($chain, ['kaufland', 'globus'], true) || ($chain === 'albert' && stripos((string) ($t['name'] ?? ''), 'hyper') !== false)) ? 'hypermarket' : 'supermarket',
             'city'  => $t['addr:city'] ?? '',
             'addr'  => $street,
@@ -57,11 +57,16 @@ function normalize_stores(array $elements, ?string $force = null): array {
 
 function main_stores(?string $only = null): int {
     $file = dirname(__DIR__) . '/stores.json';
-    $brands = ['kaufland' => 'Kaufland', 'penny' => 'Penny', 'lidl' => 'Lidl', 'billa' => 'Billa', 'globus' => 'Globus', 'albert' => 'Albert', 'norma' => 'Norma', 'coop' => 'Coop', 'terno' => 'Terno', 'dm' => 'dm', 'rossmann' => 'Rossmann', 'teta' => 'Teta'];
+    $brands = ['kaufland' => 'Kaufland', 'penny' => 'Penny', 'lidl' => 'Lidl', 'billa' => 'Billa', 'globus' => 'Globus', 'albert' => 'Albert', 'norma' => 'Norma', 'coop' => 'Coop', 'terno' => 'Terno', 'dm' => 'dm', 'rossmann' => 'Rossmann', 'teta' => 'Teta', 'datart' => 'Datart', 'planeo' => 'Planeo'];
     if ($only !== null && !isset($brands[$only])) { echo "neznamy retezec\n"; return 1; }
-    $names = $only ? [$brands[$only]] : array_values(array_diff_key($brands, ['dm' => 1, 'rossmann' => 1, 'teta' => 1]));
+    $names = $only ? [$brands[$only]] : array_values(array_diff_key($brands, ['dm' => 1, 'rossmann' => 1, 'teta' => 1, 'datart' => 1, 'planeo' => 1]));
     $re = '(' . implode('|', $names) . ')';
-    if (in_array($only, ['dm', 'rossmann', 'teta'], true)) {   // drogerie: obchody typu chemist/cosmetics
+    if (in_array($only, ['datart', 'planeo'], true)) {   // elektro: obchody typu electronics/appliance/computer apod.
+        $names = ['datart' => ['Datart', 'DATART'], 'planeo' => ['Planeo Elektro', 'PLANEO Elektro', 'Planeo', 'PLANEO']][$only];
+        $parts = '';
+        foreach ($names as $n) $parts .= 'nwr["shop"~"^(electronics|appliance|computer|mobile_phone|hifi|houseware|doityourself)$"]["brand"="' . $n . '"](area.cz);nwr["shop"~"^(electronics|appliance|computer|mobile_phone|hifi|houseware|doityourself)$"]["name"="' . $n . '"](area.cz);';
+        $q = '[out:json][timeout:90];area["ISO3166-1"="CZ"]->.cz;(' . $parts . ');out center tags;';
+    } elseif (in_array($only, ['dm', 'rossmann', 'teta'], true)) {   // drogerie: obchody typu chemist/cosmetics
         $names = ['dm' => ['dm', 'dm drogerie markt', 'dm-drogerie markt'], 'rossmann' => ['Rossmann', 'ROSSMANN'], 'teta' => ['Teta', 'Teta drogerie', 'TETA drogerie']][$only];
         $parts = '';
         foreach ($names as $n) $parts .= 'nwr["shop"~"^(chemist|cosmetics)$"]["brand"="' . $n . '"](area.cz);nwr["shop"~"^(chemist|cosmetics)$"]["name"="' . $n . '"](area.cz);';
@@ -83,8 +88,8 @@ function main_stores(?string $only = null): int {
         $q = '[out:json][timeout:90];area["ISO3166-1"="CZ"]->.cz;(nwr["shop"="supermarket"]["brand"~"^' . $re . '"](area.cz);nwr["shop"="supermarket"]["name"~"^' . $re . '"](area.cz););out center tags;';
     }
     try {
-        $stores = normalize_stores(overpass($q), in_array($only, ['coop', 'terno', 'dm', 'rossmann', 'teta'], true) ? $only : null);
-        if (count($stores) < ($only === 'globus' ? 8 : (in_array($only, ['norma', 'coop', 'terno', 'dm', 'rossmann', 'teta'], true) ? 20 : ($only ? 50 : 200)))) throw new RuntimeException('podezrele malo prodejen: ' . count($stores));
+        $stores = normalize_stores(overpass($q), in_array($only, ['coop', 'terno', 'dm', 'rossmann', 'teta', 'datart', 'planeo'], true) ? $only : null);
+        if (count($stores) < ($only === 'globus' ? 8 : (in_array($only, ['datart', 'planeo'], true) ? 15 : (in_array($only, ['norma', 'coop', 'terno', 'dm', 'rossmann', 'teta'], true) ? 20 : ($only ? 50 : 200))))) throw new RuntimeException('podezrele malo prodejen: ' . count($stores));
     } catch (Throwable $e) {
         echo 'CHYBA: ' . $e->getMessage() . "\n";
         return 1;

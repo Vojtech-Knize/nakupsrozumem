@@ -17,10 +17,12 @@ $akceDue = null;   // po jednom řetězci na volání, aby běh nezatěžoval we
 foreach ($chainsAkce as $c) if ($now - ($st['akce'][$c] ?? 0) > 20 * 3600) { $akceDue = $c; break; }
 $drugDue = null;   // akce drogerií (Rossmann, Teta) do data_drug.json
 foreach (['rossmann', 'teta'] as $c) if ($now - ($st['drug'][$c] ?? 0) > 20 * 3600) { $drugDue = $c; break; }
-$chainsStores = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno', 'dm', 'rossmann', 'teta'];
+$elecDue = null;   // akce elektra (Datart, Planeo) do data_elektro.json
+foreach (['datart', 'planeo'] as $c) if ($now - ($st['elek'][$c] ?? 0) > 20 * 3600) { $elecDue = $c; break; }
+$chainsStores = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno', 'dm', 'rossmann', 'teta', 'datart', 'planeo'];
 $storeDue = null;
 foreach ($chainsStores as $c) if ($now - ($st['stores'][$c] ?? 0) > 7 * 86400) { $storeDue = $c; break; }
-if ((!$akceDue && !$storeDue && !$drugDue) || $now - ($st['attempt'] ?? 0) < 1800) { echo "ok\n"; exit; }
+if ((!$akceDue && !$storeDue && !$drugDue && !$elecDue) || $now - ($st['attempt'] ?? 0) < 1800) { echo "ok\n"; exit; }
 
 $lock = fopen($root . '/auto.lock', 'c');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) { echo "bezi\n"; exit; }
@@ -44,6 +46,10 @@ try {
     if ($drugDue) {
         require_once __DIR__ . '/fetch_drug.php';
         if (main_drug($drugDue) === 0) $st['drug'][$drugDue] = time();
+    }
+    if ($elecDue) {
+        require_once __DIR__ . '/fetch_elektro.php';
+        if (main_elektro($elecDue) === 0) $st['elek'][$elecDue] = time();
     }
     if ($storeDue) {
         require_once __DIR__ . '/fetch_stores.php';
