@@ -26,7 +26,7 @@ foreach (['datart', 'planeo'] as $c) if ($now - ($st['elek'][$c] ?? 0) > 20 * 36
 $chainsStores = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno', 'dm', 'rossmann', 'teta', 'datart', 'planeo'];
 $storeDue = null;
 foreach ($chainsStores as $c) if ($now - ($st['stores'][$c] ?? 0) > 7 * 86400 && $can("stores:$c")) { $storeDue = $c; break; }
-if ((!$akceDue && !$storeDue && !$drugDue && !$elecDue) || $now - ($st['attempt'] ?? 0) < 1800) { echo "ok\n"; exit; }
+if ((!$akceDue && !$storeDue && !$drugDue && !$elecDue) || $now - ($st['attempt'] ?? 0) < 1500) { echo "ok\n"; exit; }   // 25 min, aby pulhodinovy cron nepreskakoval behy kvuli vterinam navic
 
 $lock = fopen($root . '/auto.lock', 'c');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) { echo "bezi\n"; exit; }
