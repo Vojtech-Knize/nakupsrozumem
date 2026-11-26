@@ -77,6 +77,7 @@ h2{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:1.25rem
 .topbtn{width:100%;min-height:3rem;margin-top:.7rem;border:2px solid var(--ink);border-radius:12px;background:transparent;color:inherit;font:inherit;font-weight:700}
 .topbtn[aria-pressed=true]{background:var(--ink);color:var(--card)}
 .soon{display:inline-block;margin-left:.4rem;padding:.05rem .5rem;border-radius:999px;background:#b3261e;color:#fff;font-size:.8rem;font-weight:700;white-space:nowrap}
+.cond{display:inline-block;margin-left:.4rem;padding:.05rem .5rem;border-radius:8px;background:#ffe8a3;color:#3d2c00;font-size:.85rem;font-weight:700}
 .pct{margin-right:.5rem;font-weight:800;color:#b3261e;white-space:nowrap}
 .navbtn{display:inline-block;margin:.5rem 0 0;padding:.55rem .9rem;border:2px solid var(--ink);border-radius:12px;color:inherit;font-weight:700;text-decoration:none}
 .digest{display:flex;gap:.6rem;align-items:flex-start;margin:.6rem 0 0;font-size:.95rem}
@@ -675,15 +676,35 @@ function sortOffers(list, mode, cards){
 const todayIso = d => { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 function validNow(it, iso){ return (!it.validFrom || it.validFrom <= iso) && (!it.validTo || it.validTo >= iso); }
 
+/* akce, která platí až při koupi více kusů („při koupi 2 ks…“): vrací potřebný počet, jinak 1 */
+function minQty(it){
+  const m = /při\s+(?:koupi|nákupu|zakoupení)\s+(\d+)\s*(?:ks|kus|bal)/i.exec((it.subtitle || '') + ' ' + (it.title || ''));
+  return m && +m[1] > 1 ? +m[1] : 1;
+}
+/* cena za požadovaný počet kusů: akční jen za celé skupiny, zbytek za běžnou cenu; null = běžnou cenu neznáme */
+function qtyCost(it, promo, qty){
+  const n = minQty(it), deal = Math.floor(qty / n) * n, rest = qty - deal;
+  if (rest && !(it.oldPrice > promo)) return null;
+  return {total: deal * promo + (rest ? rest * it.oldPrice : 0), deal, n};
+}
+function condText(o, qty){
+  if (!(o.minQty > 1)) return '';
+  if (!o.dealQty) return 'cena ' + fmtKc(o.promo) + ' za kus platí až při koupi ' + o.minQty + NBSP + 'ks, počítáme běžnou cenu';
+  if (o.dealQty < qty) return 'akční cena jen za ' + o.dealQty + NBSP + 'ks, zbytek za běžnou cenu';
+  return 'cena platí při koupi ' + o.minQty + NBSP + 'ks';
+}
+
 /* nejlevnější nabídka řetězce pro hledaný výraz (podle ceny za jednotku, jinak za balení) */
-function bestOffer(items, term, chain, cards){
+function bestOffer(items, term, chain, cards, qty = 1){
   const c = matchBest(items.filter(i => i.chain === chain), term);
   if (!c.length) return null;
   const eff = it => (cards && it.cardPrice) ? it.cardPrice : it.price;
   const scored = c.map(it => {
-    const u = unitInfo(it); const p = eff(it);
-    const up = u && it.price ? u.per * (p / it.price) : null;
-    return {it, p, u: u && u.t, up};
+    const u = unitInfo(it); const promo = eff(it);
+    const q = promo > 0 ? qtyCost(it, promo, qty) : null;
+    const p = q ? q.total / qty : 0;                      // průměrná cena za kus při požadovaném počtu
+    const up = u && it.price && p ? u.per * (p / it.price) : null;
+    return {it, p, q, promo, u: u && u.t, up};
   }).filter(x => x.p > 0);
   if (!scored.length) return null;
   const tc = {}; scored.forEach(x => { if (x.u) tc[x.u] = (tc[x.u]||0) + 1; });
@@ -691,10 +712,11 @@ function bestOffer(items, term, chain, cards){
   const pool = dom ? scored.filter(x => x.u === dom) : scored;
   pool.sort((a,b) => (a.up ?? 1e9) - (b.up ?? 1e9) || a.p - b.p);
   const b = pool[0], it = b.it;
-  const usingCard = !!(cards && it.cardPrice && it.cardPrice < it.price);
+  const usingCard = !!(b.q.deal && cards && it.cardPrice && it.cardPrice < it.price);
   const regular = it.oldPrice || it.price;
   const pct = regular > b.p ? Math.round((1 - b.p/regular)*100) : 0;
   return {item: it, price: b.p, regular, pct, card: usingCard, cardOnly: false, count: c.length,
+          minQty: b.q.n, dealQty: b.q.deal, promo: b.promo,
           cardAvail: !!(it.cardPrice && it.cardPrice < it.price)};
 }
 
@@ -947,7 +969,7 @@ function linesFor(){
     const offers = {};
     const g = effGroup(groupCounts(items, b.term), b.grp);
     const pool = g ? items.filter(i => itemGroup(i) === g) : items;
-    catChains().forEach(ch => { const o = bestOffer(pool, b.term, ch, state.cards); if (o) offers[ch] = o; });
+    catChains().forEach(ch => { const o = bestOffer(pool, b.term, ch, state.cards, b.qty); if (o) offers[ch] = o; });
     if (Object.keys(offers).length) lines.push({p:{id:b.term, name:b.term}, qty:b.qty, offers});
     else none.push(b);
   });
@@ -1052,7 +1074,7 @@ function soonTag(it){
 }
 const sugRow = it => {
   const on = state.sug.has(it.id);
-  return `<li class="${on ? 'on' : ''}"><label class="mi"><input type="checkbox" data-act="sugpick" data-id="${esc(it.id)}"${on ? ' checked' : ''}>${thumb(it)}<span><span class="ch">${esc(CHAIN_NAME[it.chain]||it.chain)}</span>${esc(it.title)}${it.subtitle ? ', ' + esc(it.subtitle) : ''}${soonTag(it)}</span></label><span class="pr">${fmtKc(it.price)}</span></li>`;
+  return `<li class="${on ? 'on' : ''}"><label class="mi"><input type="checkbox" data-act="sugpick" data-id="${esc(it.id)}"${on ? ' checked' : ''}>${thumb(it)}<span><span class="ch">${esc(CHAIN_NAME[it.chain]||it.chain)}</span>${esc(it.title)}${it.subtitle ? ', ' + esc(it.subtitle) : ''}${minQty(it) > 1 ? `<span class="cond">cena jen při koupi ${minQty(it)}${NBSP}ks</span>` : ''}${soonTag(it)}</span></label><span class="pr">${fmtKc(it.price)}</span></li>`;
 };
 function renderChainFilter(){
   const el = $('#chainfilter'); if (!el) return;
@@ -1208,10 +1230,12 @@ function mapSvg(opt, inRange){
 function itemHTML(it, store){
   const o = it.o, line = o.price * it.qty, key = it.p.id;
   const note = (o.item.validTo ? 'akce do ' + dateCs(o.item.validTo) : 'akce platí, dokud jsou zásoby') + (o.card ? ' · cena s kartou' : '');
+  const cond = condText(o, it.qty);
+  const each = o.dealQty && o.dealQty < it.qty ? `${o.dealQty} × ${fmtKc(o.promo)} + ${it.qty - o.dealQty} × ${fmtKc(o.regular)}` : `${it.qty} × ${fmtKc(o.price)}`;
   return `<li class="item${state.done.has(key) ? ' done' : ''}">
     <label><input type="checkbox" data-pid="${esc(key)}"${state.done.has(key) ? ' checked' : ''}>${thumb(o.item)}<span class="nm">${esc(o.item.title)}${o.item.subtitle ? ', ' + esc(o.item.subtitle) : ''}${it.qty > 1 ? ' × ' + it.qty : ''}</span></label>
-    <div class="pp">${o.pct > 0 ? `<span class="deal">Akce −${o.pct}${NBSP}%</span>` : ''}<span class="now">${fmtKc(line)}</span>${o.pct > 0 ? `<span class="was">${fmtKc(o.regular*it.qty)}</span>` : ''}${it.qty > 1 ? `<span class="unit">${it.qty} × ${fmtKc(o.price)}</span>` : ''}</div>
-    <div class="note">${esc(note)}${soonTag(o.item)}</div></li>`;
+    <div class="pp">${o.pct > 0 ? `<span class="deal">Akce −${o.pct}${NBSP}%</span>` : ''}<span class="now">${fmtKc(line)}</span>${o.pct > 0 ? `<span class="was">${fmtKc(o.regular*it.qty)}</span>` : ''}${it.qty > 1 ? `<span class="unit">${each}</span>` : ''}</div>
+    <div class="note">${esc(note)}${cond ? `<span class="cond">${esc(cond)}</span>` : ''}${soonTag(o.item)}</div></li>`;
 }
 function stopHTML(s, i, mode){
   const from = i === 0 ? 'Od domova' : 'Od předchozího obchodu';
@@ -1220,15 +1244,17 @@ function stopHTML(s, i, mode){
     <ul class="items">${s.items.map(it => itemHTML(it, s.store)).join('')}</ul>
     <div class="sub"><span>Za tento obchod</span><span>${fmtKc(s.subtotal)}</span></div></li>`;
 }
+/* když se něco počítá za běžnou cenu (nesplněný počet kusů), součet není jen „v akci“ */
+const totalLabel = opt => opt.stops.some(s => s.items.some(x => x.o.minQty > 1 && x.o.dealQty < x.qty)) ? 'Celkem za zboží' : 'Celkem za zboží v akci';
 function planText(opt, none){
   const out = ['Nákupní plán', 'Trasa: Domov → ' + opt.stops.map(s => s.store.name + (s.store.addr ? ' (' + s.store.addr + ')' : '')).join(' → ') + ' → Domov', ''];
   opt.stops.forEach((s,i) => {
     out.push((i+1) + ') ' + s.store.name);
-    s.items.forEach(it => out.push(' - ' + it.o.item.title + (it.qty > 1 ? ' × ' + it.qty : '') + ': ' + fmtKc(it.o.price*it.qty)));
+    s.items.forEach(it => out.push(' - ' + it.o.item.title + (it.qty > 1 ? ' × ' + it.qty : '') + ': ' + fmtKc(it.o.price*it.qty) + (it.o.minQty > 1 ? ' (' + condText(it.o, it.qty) + ')' : '')));
     out.push('');
   });
   if (none.length) out.push('Bez akce (koupit kdekoli): ' + none.map(b => b.term).join(', '), '');
-  out.push('Celkem v akci: ' + fmtKc(opt.total));
+  out.push(totalLabel(opt) + ': ' + fmtKc(opt.total));
   return out.join('\n');
 }
 function msg(t){ return '<section class="card"><p class="empty" style="margin:0">' + t + '</p></section>'; }
@@ -1279,7 +1305,7 @@ function renderPlan(){
   const steps = `<ol class="stops">${sel.stops.map((s,i) => stopHTML(s, i, state.mode)).join('')}</ol><div class="homeleg"><span aria-hidden="true">⌂</span><span>Cesta domů: ${fmtDist(sel.backM)} · asi ${sel.backMin}${NBSP}min</span></div>`;
   const dealSave = sel.regular - sel.total;
   state.copyText = planText(sel, none);
-  const totals = `<section class="card"><div class="tot"><span class="lab">Celkem za zboží v akci</span><span class="big">${fmtKc(sel.total)}</span></div>
+  const totals = `<section class="card"><div class="tot"><span class="lab">${totalLabel(sel)}</span><span class="big">${fmtKc(sel.total)}</span></div>
     <p class="tot-note">${dealSave >= 1 ? 'Akce vám v tomto plánu ušetří ' + fmtKc0(dealSave) + ' oproti běžným cenám.' : 'V tomto plánu nejsou žádné slevy oproti běžné ceně.'}</p>
     <button type="button" class="btn pri" data-act="print">Vytisknout plán</button> <button type="button" class="btn" data-act="copy">${state.copied === 'ok' ? 'Zkopírováno' : 'Zkopírovat seznam'}</button>${state.done.size ? ' <button type="button" class="btn" data-act="undone">Zrušit odškrtnutí</button>' : ''} <button type="button" class="btn" data-act="finish">Nákup hotový</button> <button type="button" class="btn danger" data-act="clearplan">Vymazat plán</button>
     ${state.copied === 'fail' ? `<p class="help">Zkopírování se nepovedlo. Text označte a zkopírujte ručně.</p><textarea class="copybox" readonly aria-label="Text nákupního plánu">${esc(state.copyText)}</textarea>` : ''}</section>`;
