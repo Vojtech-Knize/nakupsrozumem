@@ -11,7 +11,7 @@
 
 if (!defined('CRON_KEY')) { $ck = dirname(__DIR__) . '/cronkey.php'; if (is_file($ck)) require_once $ck; else define('CRON_KEY', bin2hex(random_bytes(16))); }   // tajny klic je jen na serveru (cronkey.php), ne v repozitari
 const UA = 'NakupSRozumem/0.1 (+https://nakupsrozumem.cz; denni aktualizace akci pro seniory)';
-const MIN_ITEMS = ['kaufland' => 200, 'penny' => 30, 'albert' => 30, 'norma' => 15, 'coop' => 20, 'terno' => 20, 'lidl' => 30, 'billa' => 100, 'globus' => 200]; // pod tímto počtem berem stahování jako chybné
+const MIN_ITEMS = ['kaufland' => 200, 'penny' => 15, 'albert' => 30, 'norma' => 15, 'coop' => 20, 'terno' => 20, 'lidl' => 30, 'billa' => 100, 'globus' => 200]; // pod tímto počtem berem stahování jako chybné
 
 function logmsg(string $m): void { echo $m . "\n"; }
 
@@ -332,6 +332,18 @@ function parse_penny_svg(string $svg): array {
     return $out;
 }
 
+/** Adresy týdenních letáků v HTML. Koncovku složky Penny mění (_ad, _kvod, ...), proto se bere jakákoli;
+ *  katalogy (_katalog_...) mají jinou dobu platnosti, ty se vynechávají. */
+function penny_leaflet_dirs(string $html): array {
+    preg_match_all('#PennyIntLeaflet(?:/|\\\\u002F)CZ(?:/|\\\\u002F)(\d{2})_(\d{2})_(\d{4})_([A-Za-z0-9_-]+)#', $html, $lm, PREG_SET_ORDER);
+    $dirs = [];
+    foreach ($lm as $m) {
+        if (stripos($m[4], 'katalog') !== false) continue;
+        $dirs["files.rewe.co.at/PennyIntLeaflet/CZ/$m[1]_$m[2]_$m[3]_$m[4]"] = [$m[1], $m[2], $m[3]];
+    }
+    return $dirs;
+}
+
 function fetch_penny(): array {
     $html = http_get('https://www.penny.cz/nabidky');
     $items = parse_penny($html);                                        // akce z webu (základ)
@@ -343,12 +355,10 @@ function fetch_penny(): array {
     $seen = [];
     foreach ($items as $it) $seen[mb_strtolower(preg_replace('/\W+/u', '', $it['title']))] = true;   // titulky z webu (bez gramáže)
 
-    preg_match_all('#PennyIntLeaflet(?:/|\\\\u002F)CZ(?:/|\\\\u002F)(\d{2})_(\d{2})_(\d{4})_ad#', $html, $lm, PREG_SET_ORDER);
-    $dirs = [];
-    foreach ($lm as $m) $dirs["files.rewe.co.at/PennyIntLeaflet/CZ/$m[1]_$m[2]_$m[3]_ad"] = [$m[1], $m[2], $m[3]];
+    $dirs = penny_leaflet_dirs($html);
     foreach ($dirs as $path => [$d, $mo, $y]) {
-        $from = $validFrom ?: "$y-$mo-$d";
-        $to = $validTo ?: date('Y-m-d', strtotime("$y-$mo-$d +6 days"));
+        $from = "$y-$mo-$d";
+        $to = ($from === $validFrom && $validTo) ? $validTo : date('Y-m-d', strtotime("$from +6 days"));
         for ($p = 1; $p <= 40; $p++) {
             try { $svg = http_get('https://' . $path . '/files/assets/common/page-vectorlayers/' . sprintf('%04d', $p) . '.svg'); }
             catch (Throwable $e) { break; }                             // konec letáku

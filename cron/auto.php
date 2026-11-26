@@ -12,16 +12,18 @@ $state = $root . '/auto_state.json';
 $st = is_file($state) ? (json_decode((string) file_get_contents($state), true) ?: []) : [];
 $now = time();
 
+// retezec, ktery se nedavno zkousel a nedobehl (napr. ho server ukoncil), se na 6 h preskoci, aby neblokoval ostatni
+$can = fn(string $k) => $now - ($st['try'][$k] ?? 0) > 6 * 3600;
 $chainsAkce = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno'];
 $akceDue = null;   // po jednom řetězci na volání, aby běh nezatěžoval web
-foreach ($chainsAkce as $c) if ($now - ($st['akce'][$c] ?? 0) > 20 * 3600) { $akceDue = $c; break; }
+foreach ($chainsAkce as $c) if ($now - ($st['akce'][$c] ?? 0) > 20 * 3600 && $can("akce:$c")) { $akceDue = $c; break; }
 $drugDue = null;   // akce drogerií (Rossmann, Teta) do data_drug.json
-foreach (['rossmann', 'teta'] as $c) if ($now - ($st['drug'][$c] ?? 0) > 20 * 3600) { $drugDue = $c; break; }
+foreach (['rossmann', 'teta'] as $c) if ($now - ($st['drug'][$c] ?? 0) > 20 * 3600 && $can("drug:$c")) { $drugDue = $c; break; }
 $elecDue = null;   // akce elektra (Datart, Planeo) do data_elektro.json
-foreach (['datart', 'planeo'] as $c) if ($now - ($st['elek'][$c] ?? 0) > 20 * 3600) { $elecDue = $c; break; }
+foreach (['datart', 'planeo'] as $c) if ($now - ($st['elek'][$c] ?? 0) > 20 * 3600 && $can("elek:$c")) { $elecDue = $c; break; }
 $chainsStores = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno', 'dm', 'rossmann', 'teta', 'datart', 'planeo'];
 $storeDue = null;
-foreach ($chainsStores as $c) if ($now - ($st['stores'][$c] ?? 0) > 7 * 86400) { $storeDue = $c; break; }
+foreach ($chainsStores as $c) if ($now - ($st['stores'][$c] ?? 0) > 7 * 86400 && $can("stores:$c")) { $storeDue = $c; break; }
 if ((!$akceDue && !$storeDue && !$drugDue && !$elecDue) || $now - ($st['attempt'] ?? 0) < 1800) { echo "ok\n"; exit; }
 
 $lock = fopen($root . '/auto.lock', 'c');
@@ -37,22 +39,29 @@ else { @ob_end_flush(); flush(); }
 
 $st['attempt'] = $now;
 file_put_contents($state, json_encode($st));
+// pokus se zapise pred spustenim ulohy a po uspechu smaze; stav se uklada po kazde uloze
+$begin = function (string $k) use (&$st, $state) { $st['try'][$k] = time(); file_put_contents($state, json_encode($st)); };
+$done = function (string $k) use (&$st, $state) { unset($st['try'][$k]); file_put_contents($state, json_encode($st)); };
 ob_start();
 try {
     if ($akceDue) {
         require_once __DIR__ . '/fetch_akce.php';
-        if (main($akceDue) === 0) $st['akce'][$akceDue] = time();
+        $begin("akce:$akceDue");
+        if (main($akceDue) === 0) { $st['akce'][$akceDue] = time(); $done("akce:$akceDue"); }
     }
     if ($drugDue) {
         require_once __DIR__ . '/fetch_drug.php';
-        if (main_drug($drugDue) === 0) $st['drug'][$drugDue] = time();
+        $begin("drug:$drugDue");
+        if (main_drug($drugDue) === 0) { $st['drug'][$drugDue] = time(); $done("drug:$drugDue"); }
     }
     if ($elecDue) {
         // Datart se stahuje po davkach 6 kategorii (jeden pozadavek na WEDOSu je casove omezeny); cyklus 1,7,13,19,25
         $win = 6; $c1 = 1;
         if ($elecDue === 'datart') { $c1 = (int) ($st['elek_c1'] ?? 1); if ($c1 < 1 || $c1 > 60) $c1 = 1; $_GET['c1'] = $c1; $_GET['c2'] = $c1 + $win - 1; }
         require_once __DIR__ . '/fetch_elektro.php';
+        $begin("elek:$elecDue");
         if (main_elektro($elecDue) === 0) {
+            $done("elek:$elecDue");
             if ($elecDue !== 'datart') $st['elek'][$elecDue] = time();
             elseif ($c1 + $win > 30) { $st['elek'][$elecDue] = time(); $st['elek_c1'] = 1; }   // cyklus dokoncen
             else $st['elek_c1'] = $c1 + $win;
@@ -60,7 +69,8 @@ try {
     }
     if ($storeDue) {
         require_once __DIR__ . '/fetch_stores.php';
-        if (main_stores($storeDue) === 0) $st['stores'][$storeDue] = time();
+        $begin("stores:$storeDue");
+        if (main_stores($storeDue) === 0) { $st['stores'][$storeDue] = time(); $done("stores:$storeDue"); }
     }
 } catch (Throwable $e) {
     $st['error'] = substr($e->getMessage(), 0, 200);
