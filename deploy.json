@@ -1,5 +1,5 @@
 {
- "version": "2026-11-26 12:17",
+ "version": "2026-11-26 12:50",
  "files": {
   "index.html": "f55b2053b193a2de24e196af0fe17658388201b550172a63d08e509d1ac1c60d",
   "sw.js": "38cd19a6bcce0de3bfc3feac4a66abf3e4b78d3c82921dea331a26a15079c929",
@@ -14,6 +14,7 @@
   "api/admin.php": "7cc33709ed77327c21317012a36b2fc430335af48081d65e09b7bc2f764ef4ca",
   "api/contact.php": "cbac057d1a312fcad0487f5feff23d51c85b2ee3b48ad06bc063ce147c227f4b",
   "api/list.php": "25c7d4f1b6fd1a159abba78450bd3b53bf4eb568e2efcd97c0796354c0dd5a86",
+  "cron/status.php": "a59e5ecd7a31f996716bf89a987e3464e2d854c5bb447637a0e8fe0681b6fa3b",
   "cron/auto.php": "e839f1d2a8f6685f3014545d863960b8afdfb9c6d3b2518cfa6b11392041544e",
   "cron/fetch_akce.php": "153038b797eb9f5fdfb3c435c175b192e23a7e856fe900d9e59f36a0b7bf7515",
   "cron/fetch_drug.php": "f445254805f7d1a9b0eb40c149c0c402aca64d033e55471a84e3de37e95a0dd8",
