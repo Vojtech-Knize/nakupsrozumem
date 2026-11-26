@@ -34,6 +34,9 @@ foreach (['datart', 'planeo'] as $c) if ($now - ($st['elek'][$c] ?? 0) > 20 * 36
 $chainsStores = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno', 'dm', 'rossmann', 'teta', 'datart', 'planeo'];
 $storeDue = null;
 foreach ($chainsStores as $c) if ($now - ($st['stores'][$c] ?? 0) > 7 * 86400 && $can("stores:$c")) { $storeDue = $c; break; }
+// rozpracovana Teta dostane kazdy druhy beh cely cas pro sebe, jinak ji delsi stahovani potravin necha jen par stranek
+$tetaTurn = is_file($root . '/teta_part.json') && empty($st['teta_last']) && $can('drug:teta');
+if ($tetaTurn) { $akceDue = null; $drugDue = 'teta'; }
 if ((!$akceDue && !$storeDue && !$drugDue && !$elecDue) || $now - ($st['attempt'] ?? 0) < 1500) { echo "ok\n"; exit; }   // 25 min, aby pulhodinovy cron nepreskakoval behy kvuli vterinam navic
 
 $lock = fopen($root . '/auto.lock', 'c');
@@ -48,6 +51,7 @@ if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
 else { @ob_end_flush(); flush(); }
 
 $st['attempt'] = $now;
+$st['teta_last'] = $tetaTurn;
 file_put_contents($state, json_encode($st));
 // pokus se zapise pred spustenim ulohy a po uspechu smaze; stav se uklada po kazde uloze
 $begin = function (string $k) use (&$st, $state) { $st['try'][$k] = time(); file_put_contents($state, json_encode($st)); };
