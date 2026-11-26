@@ -49,6 +49,33 @@ if ($a === 'stats' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     ]);
 }
 
+/* upozorneni na problemy s daty (jen pro spravce) */
+if (str_starts_with($a, 'push_')) {
+    require __DIR__ . '/_push.php';
+    require __DIR__ . '/../cron/status.php';
+    $mine = function () use ($pdo, $u): int { $s = $pdo->prepare('SELECT COUNT(*) FROM push_subs WHERE user_id=?'); $s->execute([$u['id']]); return (int)$s->fetchColumn(); };
+    push_table();
+    if ($a === 'push_info' && $_SERVER['REQUEST_METHOD'] === 'GET') out(['key' => push_keys()['pub'], 'devices' => $mine(), 'status' => nsr_status()['text']]);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') out(['error' => 'bad_request'], 400);
+    require_xhr();
+    $ep = (string)(body_json(2000)['endpoint'] ?? '');
+    if (!push_allowed_endpoint($ep)) out(['error' => 'bad_endpoint', 'message' => 'Tuhle službu upozornění aplikace nepodporuje.'], 422);
+    if ($a === 'push_sub') {
+        $pdo->prepare('INSERT OR REPLACE INTO push_subs(endpoint,user_id,created) VALUES(?,?,?)')->execute([$ep, $u['id'], time()]);
+        out(['ok' => true, 'devices' => $mine()]);
+    }
+    if ($a === 'push_unsub') {
+        $pdo->prepare('DELETE FROM push_subs WHERE endpoint=? AND user_id=?')->execute([$ep, $u['id']]);
+        out(['ok' => true, 'devices' => $mine()]);
+    }
+    if ($a === 'push_test') {
+        $r = push_send($ep, (int)$u['id']);
+        if (!$r['sent']) out(['error' => 'send', 'message' => 'Zkušební upozornění se nepodařilo odeslat (' . ($r['codes'] ? 'odpověď ' . implode(', ', $r['codes']) : 'telefon není přihlášený') . ').'], 502);
+        out(['ok' => true]);
+    }
+    out(['error' => 'bad_request'], 400);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_xhr();
     $in = body_json(2000); $id = (int)($in['id'] ?? 0);

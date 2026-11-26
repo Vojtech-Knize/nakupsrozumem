@@ -7,6 +7,8 @@ header('Cache-Control: no-store');
 ignore_user_abort(true);
 @set_time_limit(600);
 $root = dirname(__DIR__);
+// jednou denne zkontrolovat stav dat a pri problemu poslat upozorneni spravci
+if (is_file(__DIR__ . '/alert.php')) { try { require_once __DIR__ . '/alert.php'; nsr_daily_alert(); } catch (Throwable $e) { } }
 $dataFile = $root . '/data.json';
 $state = $root . '/auto_state.json';
 $st = is_file($state) ? (json_decode((string) file_get_contents($state), true) ?: []) : [];

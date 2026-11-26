@@ -39,10 +39,19 @@ button.danger{color:var(--accent);border-color:#d9262c55}
 input.s{font:inherit;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem;width:100%;max-width:280px;margin-bottom:.6rem}
 .pw{background:#fff8dc;border:1px solid var(--gold);border-radius:10px;padding:.6rem .8rem;margin-bottom:.6rem}
 .pw code{font-size:1.1rem;font-weight:700;user-select:all}
+#push{max-width:1068px;margin:1rem auto 0;width:calc(100% - 2rem)}
+#push pre{white-space:pre-wrap;font:inherit;font-size:.9rem;margin:.2rem 0 .6rem}
+#push button{font-size:1rem;padding:.5rem .8rem;margin:0 .3rem .4rem 0}
 </style>
 </head>
 <body>
 <header><h1>Nákup s rozumem · Správa</h1><a href="../">← Zpět do aplikace</a></header>
+<div id="push" class="card" hidden>
+  <h2>Stav dat a upozornění</h2>
+  <pre id="p-status"></pre>
+  <p id="p-note" role="status"></p>
+  <p><button type="button" id="p-on" hidden>Zapnout upozornění na tomto zařízení</button> <button type="button" id="p-test" hidden>Poslat zkušební upozornění</button> <button type="button" id="p-off" hidden>Vypnout</button></p>
+</div>
 <main id="main"><p class="msg">Načítám…</p></main>
 <script>
 const $ = s => document.querySelector(s);
@@ -144,6 +153,46 @@ document.addEventListener('click', async e => {
   } catch (er) { alert(er.message); }
 });
 load();
+
+/* ---- stav dat a upozorneni do telefonu ---- */
+let PKEY = '';
+const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const keyBytes = k => Uint8Array.from(atob(k.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+const note = t => { $('#p-note').textContent = t; };
+async function swReg() { await navigator.serviceWorker.register('../sw.js'); return navigator.serviceWorker.ready; }
+async function currentSub() { return (await swReg()).pushManager.getSubscription(); }
+async function pushButtons() {
+  const sub = canPush && Notification.permission === 'granted' ? await currentSub() : null;
+  $('#p-on').hidden = !canPush || !!sub; $('#p-test').hidden = $('#p-off').hidden = !sub;
+  if (!canPush) note(/iPhone|iPad/.test(navigator.userAgent) ? 'Na iPhonu nejdřív přidejte aplikaci na plochu (Sdílet → Přidat na plochu), otevřete ji z plochy a vejděte do Správy.' : 'Tento prohlížeč upozornění neumí.');
+  else note(sub ? 'Upozornění jsou na tomto zařízení zapnutá. Přijde jen tehdy, když bude s daty problém (kontrola jednou denně po 10. hodině).' : Notification.permission === 'denied' ? 'Upozornění jsou v prohlížeči zakázaná. Povolte je v nastavení telefonu.' : 'Upozornění na tomto zařízení zatím nejsou zapnutá.');
+}
+async function pushInit() {
+  try {
+    const j = await api('push_info'); PKEY = j.key; $('#p-status').textContent = j.status; $('#push').hidden = false;
+    await pushButtons();
+    const sub = canPush && Notification.permission === 'granted' ? await currentSub() : null;
+    if (sub) await api('push_sub', {endpoint: sub.endpoint});
+  } catch (e) { if (PKEY) note('Upozornění se nepodařilo připravit: ' + e.message); }
+}
+$('#p-on').addEventListener('click', async () => {
+  try {
+    if (await Notification.requestPermission() !== 'granted') return pushButtons();
+    const reg = await swReg();
+    const old = await reg.pushManager.getSubscription(); if (old) await old.unsubscribe();
+    const sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: keyBytes(PKEY)});
+    await api('push_sub', {endpoint: sub.endpoint}); await pushButtons();
+  } catch (e) { note('Zapnutí se nepovedlo: ' + e.message); }
+});
+$('#p-test').addEventListener('click', async () => {
+  try { const sub = await currentSub(); await api('push_test', {endpoint: sub.endpoint}); note('Odesláno. Upozornění by mělo přijít během chvíle.'); }
+  catch (e) { note(e.message); }
+});
+$('#p-off').addEventListener('click', async () => {
+  try { const sub = await currentSub(); if (sub) { await api('push_unsub', {endpoint: sub.endpoint}); await sub.unsubscribe(); } await pushButtons(); }
+  catch (e) { note('Vypnutí se nepovedlo: ' + e.message); }
+});
+pushInit();
 </script>
 </body>
 </html>
