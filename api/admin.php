@@ -51,8 +51,6 @@ if ($a === 'stats' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 
 /* upozorneni na problemy s daty (jen pro spravce) */
 if (str_starts_with($a, 'push_')) {
-    require __DIR__ . '/_push.php';
-    require __DIR__ . '/../cron/status.php';
     $mine = function () use ($pdo, $u): int { $s = $pdo->prepare('SELECT COUNT(*) FROM push_subs WHERE user_id=?'); $s->execute([$u['id']]); return (int)$s->fetchColumn(); };
     push_table();
     if ($a === 'push_info' && $_SERVER['REQUEST_METHOD'] === 'GET') out(['key' => push_keys()['pub'], 'devices' => $mine(), 'status' => nsr_status()['text']]);

@@ -123,3 +123,146 @@ function secret_key(): string {
     return (string) @file_get_contents($f);
 }
 function unsub_token(int $uid): string { return hash_hmac('sha256', 'unsub:' . $uid, secret_key()); }
+
+/** Stav dat (jen cte): "STAV: OK" nebo "STAV: PROBLEM" a seznam retezcu, ktere jsou stare, skoncily chybou
+ *  nebo maji nezvykle malo akci. Zobrazuje ho sprava a cron/auto.php?stav=1. */
+function nsr_status(): array {
+    $tz = date_default_timezone_get();
+    date_default_timezone_set('Europe/Prague');
+    @ini_set('memory_limit', '256M');
+    $root = dirname(__DIR__);                         // slozka aplikace
+    // soubor => [retezec => [nazev, nejmensi obvykly pocet polozek]] (zhruba polovina bezneho stavu)
+    $check = [
+        'data.json' => ['kaufland' => ['Kaufland', 500], 'penny' => ['Penny', 250], 'lidl' => ['Lidl', 100], 'billa' => ['Billa', 1500], 'globus' => ['Globus', 400],
+                        'albert' => ['Albert', 400], 'norma' => ['Norma', 60], 'coop' => ['Coop', 20], 'terno' => ['Terno', 15]],
+        'data_drug.json' => ['rossmann' => ['Rossmann', 2000], 'teta' => ['Teta', 1500]],
+        'data_elektro.json' => ['datart' => ['Datart', 5000], 'planeo' => ['Planeo', 900]],
+    ];
+    $now = time(); $today = date('Y-m-d', $now);
+    $bad = []; $lines = [];
+    foreach ($check as $file => $chains) {
+        $d = is_file("$root/$file") ? json_decode((string) file_get_contents("$root/$file"), true) : null;
+        if (!is_array($d)) { $bad[] = "$file: soubor s daty chybí nebo nejde přečíst"; continue; }
+        $live = [];                                                       // polozky, kterym akce jeste neskoncila
+        foreach ($d['items'] ?? [] as $it) if (empty($it['validTo']) || $it['validTo'] >= $today) $live[$it['chain'] ?? ''] = ($live[$it['chain'] ?? ''] ?? 0) + 1;
+        foreach ($chains as $c => [$name, $min]) {
+            $s = $d['sources'][$c] ?? null;
+            if (!$s) { $bad[] = "$name: v datech úplně chybí"; continue; }
+            $t = strtotime((string) ($s['fetched'] ?? '')) ?: 0;
+            $n = (int) ($s['count'] ?? 0); $v = $live[$c] ?? 0;
+            $lines[] = sprintf('%s: %d akcí, z toho platných nebo budoucích %d, staženo %s', $name, $n, $v, $t ? date('j. n. H:i', $t) : '?');
+            $why = [];
+            if (($s['ok'] ?? true) === false) $why[] = 'poslední stažení skončilo chybou';
+            if ($now - $t > 48 * 3600) $why[] = 'data jsou stará (staženo ' . ($t ? date('j. n.', $t) : 'nikdy') . ')';
+            if ($n < $min) $why[] = "jen $n akcí (obvykle aspoň $min)";
+            elseif ($v < $min / 2) $why[] = "jen $v akcí ještě platí";
+            if ($why) $bad[] = "$name: " . implode(', ', $why);
+        }
+        unset($d);
+    }
+    $text = $bad ? "STAV: PROBLEM (" . count($bad) . ")\n- " . implode("\n- ", $bad) . "\n" : "STAV: OK\n";
+    $text .= "\nZkontrolováno " . date('j. n. Y H:i', $now) . "\n" . implode("\n", $lines) . "\n";
+    date_default_timezone_set($tz);
+    return ['bad' => $bad, 'text' => $text];
+}
+
+/* Upozorneni do telefonu spravce (Web Push). Posila se prazdna zprava podepsana klicem VAPID;
+ * text si service worker po doruceni nacte z cron/auto.php?stav=1. Klic vznikne pri prvnim pouziti v chranene slozce data. */
+
+function push_b64(string $s): string { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
+
+function push_table(): void {
+    db()->exec('CREATE TABLE IF NOT EXISTS push_subs(endpoint TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created INTEGER NOT NULL)');
+}
+
+/** ['pem' => soukromy klic, 'pub' => verejny klic v base64url] */
+function push_keys(): array {
+    db();                                             // zalozi chranenou slozku data
+    $f = DATA_DIR . '/vapid.json';
+    $k = is_file($f) ? json_decode((string) file_get_contents($f), true) : null;
+    if (!empty($k['pem']) && !empty($k['pub'])) return $k;
+    $res = openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC]);
+    if (!$res || !openssl_pkey_export($res, $pem)) throw new RuntimeException('klic pro upozorneni nejde vytvorit');
+    $ec = openssl_pkey_get_details($res)['ec'];
+    $pub = "\x04" . str_pad($ec['x'], 32, "\0", STR_PAD_LEFT) . str_pad($ec['y'], 32, "\0", STR_PAD_LEFT);
+    $k = ['pem' => $pem, 'pub' => push_b64($pub)];
+    if (file_put_contents($f, json_encode($k), LOCK_EX) === false) throw new RuntimeException('klic pro upozorneni nejde ulozit');
+    return $k;
+}
+
+/** Posilat jen na znamé služby prohlížečů, nikam jinam. */
+function push_allowed_endpoint(string $ep): bool {
+    $p = parse_url($ep);
+    if (($p['scheme'] ?? '') !== 'https' || empty($p['host']) || isset($p['user']) || isset($p['port']) || strlen($ep) > 1500) return false;
+    return (bool) preg_match('/^(fcm\.googleapis\.com|android\.googleapis\.com|[a-z0-9.-]+\.push\.apple\.com|[a-z0-9.-]+\.push\.services\.mozilla\.com|[a-z0-9.-]+\.notify\.windows\.com)$/i', $p['host']);
+}
+
+/** Podpis ES256 z formatu DER na 64 bajtu r||s. */
+function push_der_to_raw(string $der): string {
+    $i = (ord($der[1]) & 0x80) ? 2 + (ord($der[1]) & 0x7f) : 2;
+    $out = '';
+    for ($n = 0; $n < 2; $n++) {
+        $len = ord($der[$i + 1]);
+        $out .= str_pad(ltrim(substr($der, $i + 2, $len), "\0"), 32, "\0", STR_PAD_LEFT);
+        $i += 2 + $len;
+    }
+    return $out;
+}
+
+function push_auth_header(string $endpoint): string {
+    $k = push_keys();
+    $p = parse_url($endpoint);
+    $data = push_b64((string) json_encode(['typ' => 'JWT', 'alg' => 'ES256'])) . '.'
+          . push_b64((string) json_encode(['aud' => $p['scheme'] . '://' . $p['host'], 'exp' => time() + 12 * 3600, 'sub' => 'https://app.nakupsrozumem.cz'], JSON_UNESCAPED_SLASHES));
+    if (!openssl_sign($data, $sig, $k['pem'], OPENSSL_ALGO_SHA256)) throw new RuntimeException('podpis upozorneni selhal');
+    return 'Authorization: vapid t=' . $data . '.' . push_b64(push_der_to_raw($sig)) . ', k=' . $k['pub'];
+}
+
+/** Posle upozorneni na zarizeni soucasnych spravcu (volitelne jen na jedno). Neplatna prihlaseni smaze. */
+function push_send(?string $endpoint = null, ?int $userId = null): array {
+    push_table();
+    $rows = db()->query('SELECT p.endpoint, p.user_id, u.email, u.is_admin FROM push_subs p JOIN users u ON u.id = p.user_id')->fetchAll();
+    $r = ['devices' => 0, 'sent' => 0, 'codes' => []];
+    foreach ($rows as $row) {
+        if (!is_admin_row($row)) continue;
+        if ($endpoint !== null && $row['endpoint'] !== $endpoint) continue;
+        if ($userId !== null && (int) $row['user_id'] !== $userId) continue;
+        if (!push_allowed_endpoint($row['endpoint'])) continue;
+        $r['devices']++;
+        $c = curl_init($row['endpoint']);
+        curl_setopt_array($c, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => '', CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
+            CURLOPT_FOLLOWLOCATION => false, CURLOPT_HTTPHEADER => [push_auth_header($row['endpoint']), 'TTL: 86400', 'Urgency: high', 'Content-Length: 0']]);
+        curl_exec($c);
+        $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+        curl_close($c);
+        if ($code >= 200 && $code < 300) { $r['sent']++; continue; }
+        $r['codes'][] = $code;
+        if ($code === 404 || $code === 410) db()->prepare('DELETE FROM push_subs WHERE endpoint=?')->execute([$row['endpoint']]);
+    }
+    return $r;
+}
+
+/** Jednou denne (po 10. hodine) zkontroluje stav dat a pri problemu posle upozorneni spravci. Vola ho cron/auto.php. */
+function nsr_daily_alert(): void {
+    $dir = dirname(__DIR__) . '/data';
+    $now = new DateTime('now', new DateTimeZone('Europe/Prague'));
+    $h = (int) $now->format('G'); $day = $now->format('Y-m-d');
+    if ($h < 10 || $h >= 21) return;                                  // v noci nebudit
+    $f = $dir . '/alert.json';
+    $s = is_file($f) ? (json_decode((string) file_get_contents($f), true) ?: []) : [];
+    if (($s['done'] ?? '') === $day) return;
+    db();                                                             // zalozi slozku data
+    $lock = fopen($dir . '/alert.lock', 'c');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) return;
+    $s = is_file($f) ? (json_decode((string) file_get_contents($f), true) ?: []) : [];
+    $tries = ($s['day'] ?? '') === $day ? (int) ($s['tries'] ?? 0) : 0;
+    if (($s['done'] ?? '') !== $day && $tries < 3) {                  // nejvys 3 pokusy denne
+        $s = ['day' => $day, 'tries' => $tries + 1, 'done' => $s['done'] ?? ''];
+        file_put_contents($f, json_encode($s));                       // zapsat predem, aby pad neopakoval pokus donekonecna
+        $bad = nsr_status()['bad'];
+        $r = $bad ? push_send() : null;
+        if (!$bad || $r['sent'] > 0 || $r['devices'] === 0) $s['done'] = $day;
+        file_put_contents($f, json_encode($s + ['checked' => $now->format('c'), 'problems' => count($bad), 'push' => $r]));
+    }
+    flock($lock, LOCK_UN); fclose($lock);
+}

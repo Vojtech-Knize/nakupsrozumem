@@ -6,7 +6,7 @@ self.addEventListener('fetch',e=>{const r=e.request;const u=new URL(r.url);if(r.
 // upozorneni spravci: zprava je prazdna, text se nacte ze stavu dat
 self.addEventListener('push',e=>{e.waitUntil((async()=>{
  let title='Nákup s rozumem',body='Zkontrolujte stav dat ve správě.';
- try{const t=await (await fetch('cron/status.php?_='+Date.now(),{cache:'no-store'})).text();
+ try{const t=await (await fetch('cron/auto.php?stav=1&_='+Date.now(),{cache:'no-store'})).text();
   if(t.startsWith('STAV: PROBLEM')){title='Nákup s rozumem: problém s daty';body=t.split('\n').filter(l=>l.startsWith('- ')).join('\n')||body}
   else if(t.startsWith('STAV: OK')){title='Nákup s rozumem: upozornění fungují';body='Data jsou v pořádku.'}}catch(_){}
  await self.registration.showNotification(title,{body,icon:'icon-192.png',tag:'nsr-stav',renotify:true});
