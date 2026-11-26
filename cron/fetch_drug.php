@@ -84,46 +84,74 @@ function fetch_rossmann(): array {
     return $items;
 }
 
-function fetch_teta(): array {
-    $items = []; $seen = [];
-    $from = date('Y-m-d'); $to = date('Y-m-d', strtotime('+3 days'));
-    $pages = 160;
-    for ($page = 1; $page <= min($pages, DRUG_MAXP); $page++) {
-        try { $h = http_get('https://www.tetadrogerie.cz/eshop/produkty/v-akci' . ($page > 1 ? '?strana=' . $page : '')); }
-        catch (Throwable $e) { if ($page > 5) break; throw $e; }
-        if ($page === 1 && preg_match('/z\s+(\d+)\s*</u', preg_replace('/\s+/', ' ', strip_tags(substr($h, 0, 800000))), $mt)) $pages = min(200, (int) ceil(((int) $mt[1]) / 40) + 1);
-        preg_match_all('~href="(/eshop/katalog/[^"]+)"[^>]*c-product-card__link"~', $h, $hm);
-        $cards = explode('c-product-card__link"', $h);
-        array_shift($cards);
-        if (!$cards) break;
-        foreach ($cards as $ci => $c) {
-            $href = $hm[1][$ci] ?? null;
-            if (!preg_match('~c-product-card__title[^>]*>([^<]*)<~', $c, $mt2)) continue;
-            $title = drug_text($mt2[1]);
-            $former = preg_match('~c-product-price__former-price[^>]*>([^<]*)<~', $c, $mf) ? drug_num($mf[1]) : null;
-            $val = preg_match('~c-product-price__value[^>]*><strong[^>]*>([^<]*)<~', $c, $mv) ? drug_num($mv[1]) : null;
-            if (!$former || !$val || $val >= $former) continue;
-            $note = preg_match('~c-product-price__note[^>]*>([^<]*)<~', $c, $mn) ? drug_text($mn[1]) : '';
-            $sub = (stripos($note, 'při koupi') !== false && preg_match('~(při koupi[^*]*)~iu', $note, $mm)) ? trim($mm[1]) : '';
-            $img = preg_match('~<img[^>]+src="(https://teta-drogerie\.[^"]+)"~', $c, $mi) ? html_entity_decode($mi[1], ENT_QUOTES) : null;
-            $key = md5($title . $val);
-            if (isset($seen[$key])) continue;
-            $seen[$key] = true;
-            $items[] = [
-                'chain' => 'teta', 'id' => 'teta-' . substr($key, 0, 12),
-                'title' => $title, 'subtitle' => $sub, 'category' => null,
-                'price' => $val, 'oldPrice' => $former, 'cardPrice' => null,
-                'discount' => (int) round(($former - $val) / $former * 100),
-                'unit' => '', 'basePrice' => null, 'validFrom' => $from, 'validTo' => $to,
-                'img' => $img, 'url' => $href ? 'https://www.tetadrogerie.cz' . $href : null,
-            ];
-        }
-        usleep(120000);
+/** Vyparsuje dlaždice jedné stránky akcí Teta do $items (bez duplicit); vrací počet dlaždic na stránce. */
+function teta_parse(string $h, array &$items, array &$seen): int {
+    preg_match_all('~href="(/eshop/katalog/[^"]+)"[^>]*c-product-card__link"~', $h, $hm);
+    $cards = explode('c-product-card__link"', $h);
+    array_shift($cards);
+    foreach ($cards as $ci => $c) {
+        $href = $hm[1][$ci] ?? null;
+        if (!preg_match('~c-product-card__title[^>]*>([^<]*)<~', $c, $mt2)) continue;
+        $title = drug_text($mt2[1]);
+        $former = preg_match('~c-product-price__former-price[^>]*>([^<]*)<~', $c, $mf) ? drug_num($mf[1]) : null;
+        $val = preg_match('~c-product-price__value[^>]*><strong[^>]*>([^<]*)<~', $c, $mv) ? drug_num($mv[1]) : null;
+        if (!$former || !$val || $val >= $former) continue;
+        $note = preg_match('~c-product-price__note[^>]*>([^<]*)<~', $c, $mn) ? drug_text($mn[1]) : '';
+        $sub = (stripos($note, 'při koupi') !== false && preg_match('~(při koupi[^*]*)~iu', $note, $mm)) ? trim($mm[1]) : '';
+        $img = preg_match('~<img[^>]+src="(https://teta-drogerie\.[^"]+)"~', $c, $mi) ? html_entity_decode($mi[1], ENT_QUOTES) : null;
+        $key = md5($title . $val);
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
+        $items[] = [
+            'chain' => 'teta', 'id' => 'teta-' . substr($key, 0, 12),
+            'title' => $title, 'subtitle' => $sub, 'category' => null,
+            'price' => $val, 'oldPrice' => $former, 'cardPrice' => null,
+            'discount' => (int) round(($former - $val) / $former * 100),
+            'unit' => '', 'basePrice' => null, 'validFrom' => '', 'validTo' => '',
+            'img' => $img, 'url' => $href ? 'https://www.tetadrogerie.cz' . $href : null,
+        ];
     }
-    return $items;
+    return count($cards);
 }
 
-function main_drug(?string $only = null): int {
+/** Teta má kolem 160 stránek po 1 MB, v jednom požadavku je server nestihne. Stahuje se po 4 souběžně a po každé
+ *  čtveřici se rozpracovaný stav uloží; po vyčerpání času vrací null a příště pokračuje. Hotový seznam vrací jako pole. */
+function fetch_teta(?float $deadline = null, ?string $partFile = null, ?callable $get = null): ?array {
+    $partFile ??= dirname(__DIR__) . '/teta_part.json';
+    $get ??= 'http_get_multi';
+    $s = is_file($partFile) ? json_decode((string) file_get_contents($partFile), true) : null;
+    if (!is_array($s) || time() - ($s['started'] ?? 0) > 20 * 3600) $s = ['started' => time(), 'next' => 1, 'pages' => 160, 'failed' => 0, 'items' => [], 'seen' => []];
+    $max = min(200, DRUG_MAXP);
+    while ($s['next'] <= min($s['pages'], $max)) {
+        $urls = [];
+        for ($pg = $s['next']; $pg < $s['next'] + 4 && $pg <= min($s['pages'], $max); $pg++)
+            $urls[$pg] = 'https://www.tetadrogerie.cz/eshop/produkty/v-akci' . ($pg > 1 ? '?strana=' . $pg : '');
+        $res = $get($urls);
+        $again = array_filter($urls, fn($k) => ($res[$k] ?? null) === null, ARRAY_FILTER_USE_KEY);
+        if ($again) { usleep(500000); foreach ($get($again) as $k => $h) $res[$k] = $h; }   // jeden opakovany pokus
+        if (!array_filter($res, fn($h) => $h !== null)) throw new RuntimeException('Teta: stranky od ' . $s['next'] . ' nejdou stahnout');
+        ksort($res);
+        $end = false;
+        foreach ($res as $pg => $h) {
+            if ($h === null) { $s['failed']++; continue; }
+            if ($pg === 1 && preg_match('/z\s+(\d+)\s*</u', preg_replace('/\s+/', ' ', strip_tags(substr($h, 0, 800000))), $mt)) $s['pages'] = min(200, (int) ceil(((int) $mt[1]) / 40) + 1);
+            if (teta_parse($h, $s['items'], $s['seen']) === 0) { $end = true; break; }
+        }
+        if ($s['failed'] > 8) { @unlink($partFile); throw new RuntimeException('Teta: prilis mnoho nestazenych stranek'); }
+        if ($end) break;
+        $s['next'] += count($urls);
+        if (file_put_contents($partFile . '.tmp', json_encode($s, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) !== false) rename($partFile . '.tmp', $partFile);
+        if ($deadline !== null && microtime(true) >= $deadline && $s['next'] <= min($s['pages'], $max)) return null;
+        usleep(120000);
+    }
+    @unlink($partFile);
+    $from = date('Y-m-d'); $to = date('Y-m-d', strtotime('+3 days'));
+    foreach ($s['items'] as &$it) { $it['validFrom'] = $from; $it['validTo'] = $to; } unset($it);
+    return $s['items'];
+}
+
+/** Vrací 0 = hotovo, 1 = nic se nezapsalo, 2 = Teta rozpracovaná (pokračuje se příštím voláním; jen s $deadline). */
+function main_drug(?string $only = null, ?float $deadline = null): int {
     $file = dirname(__DIR__) . '/data_drug.json';
     $prev = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
     $res = ['updated' => date('c'), 'sources' => [], 'items' => []];
@@ -134,7 +162,8 @@ function main_drug(?string $only = null): int {
         };
         if ($only !== null && $only !== $chain) { $keep(); if (isset($prev['sources'][$chain])) $res['sources'][$chain] = $prev['sources'][$chain]; continue; }
         try {
-            $items = $fn();
+            $items = $chain === 'teta' ? fetch_teta($deadline) : $fn();
+            if ($items === null) { logmsg('[teta] rozpracovano, pokracovani priste'); return 2; }
             if (DRUG_MAXP < 9999) { logmsg("[$chain] test: " . count($items) . ' polozek; priklad: ' . json_encode(array_slice($items, 0, 3), JSON_UNESCAPED_UNICODE)); return 0; }
             if (count($items) < MIN_ITEMS_DRUG[$chain]) throw new RuntimeException('podezrele malo polozek: ' . count($items));
             $res['sources'][$chain] = ['ok' => true, 'count' => count($items), 'fetched' => date('c')];

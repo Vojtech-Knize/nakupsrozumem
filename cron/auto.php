@@ -17,6 +17,8 @@ $st = is_file($state) ? (json_decode((string) file_get_contents($state), true) ?
 $now = time();
 // po zmene cteni Penny letaku se Penny stahne pri nejblizsim behu, neceka se 20 h
 if (($st['penny_ver'] ?? 1) < 3) { unset($st['akce']['penny'], $st['try']['akce:penny']); $st['penny_ver'] = 3; }
+// po prepsani stahovani Tety se zkusi hned
+if (($st['teta_ver'] ?? 1) < 2) { unset($st['drug']['teta'], $st['try']['drug:teta']); $st['teta_ver'] = 2; }
 
 // retezec, ktery se nedavno zkousel a nedobehl (napr. ho server ukoncil), se na 6 h preskoci, aby neblokoval ostatni
 $can = fn(string $k) => $now - ($st['try'][$k] ?? 0) > 6 * 3600;
@@ -60,7 +62,10 @@ try {
     if ($drugDue) {
         require_once __DIR__ . '/fetch_drug.php';
         $begin("drug:$drugDue");
-        if (main_drug($drugDue) === 0) { $st['drug'][$drugDue] = time(); $done("drug:$drugDue"); }
+        // Teta se stahuje po castech: pracuje se nejvys do 45. vteriny od zacatku pozadavku
+        $r = main_drug($drugDue, (float) ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)) + 45);
+        if ($r === 0) { $st['drug'][$drugDue] = time(); $done("drug:$drugDue"); }
+        elseif ($r === 2) { $done("drug:$drugDue"); $elecDue = $storeDue = null; }   // pristi beh pokracuje; dnes uz nic dalsiho
     }
     if ($elecDue) {
         // Datart se stahuje po davkach 6 kategorii (jeden pozadavek na WEDOSu je casove omezeny); cyklus 1,7,13,19,25
