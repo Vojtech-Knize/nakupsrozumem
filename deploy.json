@@ -1,5 +1,5 @@
 {
- "version": "2026-11-26 09:25",
+ "version": "2026-11-26 09:36",
  "files": {
   "index.html": "f55b2053b193a2de24e196af0fe17658388201b550172a63d08e509d1ac1c60d",
   "sw.js": "38cd19a6bcce0de3bfc3feac4a66abf3e4b78d3c82921dea331a26a15079c929",
@@ -14,7 +14,7 @@
   "api/admin.php": "7cc33709ed77327c21317012a36b2fc430335af48081d65e09b7bc2f764ef4ca",
   "api/contact.php": "cbac057d1a312fcad0487f5feff23d51c85b2ee3b48ad06bc063ce147c227f4b",
   "api/list.php": "25c7d4f1b6fd1a159abba78450bd3b53bf4eb568e2efcd97c0796354c0dd5a86",
-  "cron/auto.php": "75404f202c81e244d20055be37f83d67fb3890ff3d99433615b525fa51b9dc0b",
+  "cron/auto.php": "fb204900cc5240f02612cc6e2c5b99d50a3ceb1007c4412e79df92a98126e119",
   "cron/fetch_akce.php": "52fc7b7644526af73e2252848c77b634fb34e4cd92d10f3f1c58f03625d180cd",
   "cron/fetch_drug.php": "f445254805f7d1a9b0eb40c149c0c402aca64d033e55471a84e3de37e95a0dd8",
   "cron/fetch_stores.php": "e832b807f046e9594a6e9555431ba2e5de1fd310a0de957633077d86afc95d6f",

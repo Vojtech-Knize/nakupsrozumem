@@ -16,7 +16,9 @@ $now = time();
 $can = fn(string $k) => $now - ($st['try'][$k] ?? 0) > 6 * 3600;
 $chainsAkce = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno'];
 $akceDue = null;   // po jednom řetězci na volání, aby běh nezatěžoval web
-foreach ($chainsAkce as $c) if ($now - ($st['akce'][$c] ?? 0) > 20 * 3600 && $can("akce:$c")) { $akceDue = $c; break; }
+// retezec, jehoz posledni stazeni skoncilo chybou, se zkousi znovu (po 6 h), i kdyz neni starsi nez 20 h
+$srcOk = function (string $c) use ($dataFile): bool { $d = is_file($dataFile) ? json_decode((string) file_get_contents($dataFile), true) : null; return ($d['sources'][$c]['ok'] ?? true) !== false; };
+foreach ($chainsAkce as $c) if (($now - ($st['akce'][$c] ?? 0) > 20 * 3600 || !$srcOk($c)) && $can("akce:$c")) { $akceDue = $c; break; }
 $drugDue = null;   // akce drogerií (Rossmann, Teta) do data_drug.json
 foreach (['rossmann', 'teta'] as $c) if ($now - ($st['drug'][$c] ?? 0) > 20 * 3600 && $can("drug:$c")) { $drugDue = $c; break; }
 $elecDue = null;   // akce elektra (Datart, Planeo) do data_elektro.json
@@ -47,7 +49,7 @@ try {
     if ($akceDue) {
         require_once __DIR__ . '/fetch_akce.php';
         $begin("akce:$akceDue");
-        if (main($akceDue) === 0) { $st['akce'][$akceDue] = time(); $done("akce:$akceDue"); }
+        if (main($akceDue) === 0 && $srcOk($akceDue)) { $st['akce'][$akceDue] = time(); $done("akce:$akceDue"); }
     }
     if ($drugDue) {
         require_once __DIR__ . '/fetch_drug.php';
