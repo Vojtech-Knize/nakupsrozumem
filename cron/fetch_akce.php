@@ -280,7 +280,11 @@ function parse_penny_svg(string $svg): array {
         $r1 = round($price, 1);
         $price = abs($price - $r1) < 0.06 ? $r1 : round($price, 2);
         if ($price < 2 || $price > 2000) return null;
-        return ['title' => trim(preg_replace('/\s+/u', ' ', implode(' ', $name))), 'grams' => $grams[0] . ' ' . $grams[1], 'price' => $price, 'basePrice' => $amt . ' ' . $unit . ' ' . $perStr . ' Kč'];
+        if (abs($price * 10 - round($price * 10)) > 0.001 || !in_array((int) round($price * 10) % 10, [0, 5, 9], true)) return null;   // neobvykla koncovka = spatne sparovana nebo nepresna cena
+        $title = trim(preg_replace('/\s+/u', ' ', implode(' ', $name)));
+        if (!preg_match('/^[^\p{Ll}]{3}/u', $title)) return null;                          // utrzek nazvu (nazvy v letaku jsou verzalkami)
+        if (preg_match('/(?<![\p{L}\d])\d+\s?[x\x{00d7}](?![\p{L}\d])/u', $title)) return null;   // vicebaleni "6x": cena za cele baleni se neda overit
+        return ['title' => $title, 'grams' => $grams[0] . ' ' . $grams[1], 'price' => $price, 'basePrice' => $amt . ' ' . $unit . ' ' . $perStr . ' Kč'];
     };
     foreach ($cols as $col) {
         usort($col, fn($a, $b) => $b[1] <=> $a[1]);                  // shora dolů (Y klesá)
@@ -327,7 +331,11 @@ function parse_penny_svg(string $svg): array {
         $cand = array_values(array_filter($blocks, fn($b) => $b[1] !== null && $b[1] - $ry > 0 && $b[1] - $ry <= 16));
         if (count($cand) !== count($row)) continue;
         usort($cand, fn($a, $b) => $a[0] <=> $b[0]);
-        foreach ($row as $i => $u) { $o = $mk($cand[$i][2], $cand[$i][3], $u[2]); if ($o) $out[] = $o; }
+        foreach ($row as $i => $u) {
+            $dx = $u[0] - $cand[$i][0];
+            if ($dx < -4 || $dx > 75) continue;                       // cena za jednotku je daleko od nazvu: patri jinemu zbozi
+            $o = $mk($cand[$i][2], $cand[$i][3], $u[2]); if ($o) $out[] = $o;
+        }
     }
     return $out;
 }
@@ -359,9 +367,11 @@ function fetch_penny(): array {
     foreach ($dirs as $path => [$d, $mo, $y]) {
         $from = "$y-$mo-$d";
         $to = ($from === $validFrom && $validTo) ? $validTo : date('Y-m-d', strtotime("$from +6 days"));
-        for ($p = 1; $p <= 40; $p++) {
+        $miss = 0;
+        for ($p = 1; $p <= 60; $p++) {
             try { $svg = http_get('https://' . $path . '/files/assets/common/page-vectorlayers/' . sprintf('%04d', $p) . '.svg'); }
-            catch (Throwable $e) { break; }                             // konec letáku
+            catch (Throwable $e) { if (++$miss >= 3) break; continue; }   // stranka jen jako obrazek chybi; konec letaku = 3 chybejici po sobe
+            $miss = 0;
             foreach (parse_penny_svg($svg) as $o) {
                 $key = mb_strtolower(preg_replace('/\W+/u', '', $o['title'] . $o['grams']));
                 if (isset($seen[$key]) || isset($seen[mb_strtolower(preg_replace('/\W+/u', '', $o['title']))])) continue;
