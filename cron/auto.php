@@ -11,6 +11,8 @@ $dataFile = $root . '/data.json';
 $state = $root . '/auto_state.json';
 $st = is_file($state) ? (json_decode((string) file_get_contents($state), true) ?: []) : [];
 $now = time();
+// po zmene cteni Penny letaku se Penny stahne pri nejblizsim behu, neceka se 20 h
+if (($st['penny_ver'] ?? 1) < 2) { unset($st['akce']['penny'], $st['try']['akce:penny']); $st['penny_ver'] = 2; }
 
 // retezec, ktery se nedavno zkousel a nedobehl (napr. ho server ukoncil), se na 6 h preskoci, aby neblokoval ostatni
 $can = fn(string $k) => $now - ($st['try'][$k] ?? 0) > 6 * 3600;

@@ -226,8 +226,182 @@ function parse_lidl(string $html, string $category = ''): array {
 }
 
 /** Lidl: seznam kategorií potravin a drogerie se bere ze stránky potravin, každá kategorie je samostatná stránka. */
-/** Penny leták: z vektorových stránek (SVG) přečte bloky "název / gramáž / cena za 100 g" a cenu dopočítá.
- *  Velká červená cena je v letáku kreslená speciálními znaky, proto se nečte; položky bez ověřitelné ceny se vynechají. */
+/** Penny leták, hlavní čtení: bere přímo velkou cenu z vektorové stránky (SVG) a přiřadí ji k bloku "název / gramáž / cena za jednotku".
+ *  Koncovku ceny kreslí leták zvláštním znakem. Nejdřív se párují ceny, které sedí s cenou za jednotku, zbytek podle polohy v dlaždici
+ *  (jen když si cena a název vyberou vzájemně). Neznámá koncovka nebo nejisté přiřazení = položka se vynechá. */
+const PENNY_END = ["\u{01FA}" => 0.9, "\u{01F7}" => 0.5, "\u{0206}" => 0.25, "\u{024F}" => 0.0];
+
+function parse_penny_page(string $svg): array {
+    $red = '255,45,22'; $light = ['43,46,52', '255,255,255'];
+    $E = []; $P = [];                                              // E = kousky textu, P = velké ceny
+    if (!preg_match_all('#<svg:text\s+transform="matrix\(([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) ([-\d.]+)\)[^"]*"[^>]*>(.*?)</svg:text>#s', $svg, $tm, PREG_SET_ORDER)) return [];
+    foreach ($tm as $t) {
+        $sx = (float) $t[1]; $tx = (float) $t[3]; $ty = (float) $t[4];
+        if (!preg_match_all('#<svg:tspan([^>]*)>(.*?)</svg:tspan>#s', $t[5], $ts, PREG_SET_ORDER)) continue;
+        foreach ($ts as $q) {
+            $xs = preg_match('/\bx="([^"]*)"/', $q[1], $xm) ? array_map('floatval', preg_split('/\s+/', trim($xm[1]))) : [0.0];
+            $raw = html_entity_decode(strip_tags($q[2]), ENT_QUOTES | ENT_XML1, 'UTF-8');
+            $chars = preg_split('//u', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $col = preg_match('/rgb\(([^)]*)\)/', $q[1], $cm) ? str_replace(' ', '', $cm[1]) : '';
+            if ($sx >= 10 && ($col === $red || $col === '255,255,255') && preg_match_all('/(\d{1,4})([\x{01FA}\x{01F7}\x{0206}\x{024F}])/u', $raw, $pm, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+                foreach ($pm as $m) {
+                    $i = mb_strlen(substr($raw, 0, $m[0][1]), 'UTF-8');
+                    if (isset($xs[$i])) $P[] = ['x' => $tx + $sx * $xs[$i], 'y' => $ty, 'v' => round((int) $m[1][0] + PENNY_END[$m[2][0]], 2)];
+                }
+            }
+            // jeden tspan může nést víc textů vedle sebe: rozdělit tam, kde x skočí
+            $segs = [[$xs[0], $raw]];
+            if ($chars && count($chars) === count($xs)) {
+                $segs = []; $cur = ''; $start = $xs[0];
+                foreach ($chars as $i => $ch) {
+                    if ($i > 0 && $xs[$i] - $xs[$i - 1] > 4) { $segs[] = [$start, $cur]; $cur = ''; $start = $xs[$i]; }
+                    $cur .= $ch;
+                }
+                $segs[] = [$start, $cur];
+            }
+            foreach ($segs as [$x0, $str]) {
+                $v = trim(preg_replace('/\s+/u', ' ', $str));
+                if ($v !== '') $E[] = ['x' => $tx + $sx * $x0, 'y' => $ty, 'sz' => $sx, 'col' => $col, 's' => $v];
+            }
+        }
+    }
+    if (!$P) return [];
+    // sloupce textu podle x
+    $lines = array_values(array_filter($E, fn($e) => $e['sz'] >= 3.9 && $e['sz'] <= 7.6 && in_array($e['col'], $light, true)
+        && preg_match('/\p{L}/u', $e['s']) && !preg_match('/[\x{01FA}\x{01F7}\x{0206}\x{024F}]/u', $e['s'])));
+    usort($lines, fn($a, $b) => $a['x'] <=> $b['x']);
+    $cols = [];
+    foreach ($lines as $l) {
+        $k = null;
+        foreach ($cols as $i => $c) if (abs($c['x'] - $l['x']) <= 4) { $k = $i; break; }
+        if ($k === null) { $cols[] = ['x' => $l['x'], 'l' => []]; $k = count($cols) - 1; }
+        $cols[$k]['l'][] = $l;
+    }
+    // bloky: řádky verzálkami = název, pak popis
+    $B = [];
+    foreach ($cols as $c) {
+        $ls = $c['l'];
+        usort($ls, fn($a, $b) => $b['y'] <=> $a['y'] ?: $a['x'] <=> $b['x']);
+        $cur = null; $prev = null;
+        foreach ($ls as $l) {
+            $up = preg_match('/\p{Lu}{2}/u', $l['s']) && !preg_match('/\p{Ll}{2}/u', $l['s']);
+            if ($prev !== null && $prev - $l['y'] > 12) $cur = null;
+            if ($up && ($cur === null || $B[$cur]['rest'])) { $B[] = ['x' => $c['x'], 'top' => $l['y'], 'name' => [$l['s']], 'rest' => []]; $cur = count($B) - 1; }
+            elseif ($cur !== null) { if ($up) $B[$cur]['name'][] = $l['s']; else $B[$cur]['rest'][] = $l['s']; }
+            $prev = $l['y'];
+        }
+    }
+    $unitRe = '/(?<![\d,])(\d+(?:,\d+)?)\s?(kg|g|ml|l|ks)\s*(\d+(?:\s\d{3})*,\d{2})\s*Kč/u';
+    $packRe = '/(?:(\d+)\s?[x\x{00d7}]\s?)?(?<![\d,])(\d+(?:,\d+)?)(?:\s?\/\s?(\d+(?:,\d+)?))?\s?(kg|g|ml|l|ks)(?!\p{L})/u';
+    $num = fn(string $v) => (float) str_replace(',', '.', preg_replace('/\s/u', '', $v));
+    $base = fn(float $v, string $u) => ($u === 'kg' || $u === 'l') ? $v * 1000 : $v;
+    $cls = fn(string $u) => ($u === 'kg' || $u === 'g') ? 'g' : ($u === 'ks' ? 'ks' : 'ml');
+    $blocks = [];
+    foreach ($B as $b) {
+        $txt = preg_split('/v nabídce|běžně/iu', implode(' ', $b['rest']))[0];
+        $unit = null;
+        if (preg_match($unitRe, $txt, $um)) {
+            $txt = str_replace($um[0], ' ', $txt);
+            $unit = ['a' => $base($num($um[1]), $um[2]), 'c' => $cls($um[2]), 'p' => $num($um[3]), 's' => "$um[1] $um[2] $um[3] Kč"];
+        }
+        $title = trim(preg_replace('/\s+/u', ' ', str_replace('*', '', implode(' ', $b['name']))));
+        $pack = null;
+        if (preg_match($packRe, $txt, $m) || preg_match($packRe, implode(' ', $b['name']), $m)) {
+            $n = $num($m[3] !== '' ? $m[3] : $m[2]);                  // "680/385 g": cena za jednotku se počítá z pevného podílu
+            $pack = ['q' => $base($n, $m[4]) * ($m[1] !== '' ? (int) $m[1] : 1), 'c' => $cls($m[4]), 's' => trim($m[0])];
+        } elseif (preg_match('/cena za (1\s?kg|100\s?g|1\s?ks)/iu', $txt, $m)) $pack = ['q' => 0, 'c' => '', 's' => 'cena za ' . $m[1]];
+        elseif (preg_match('/(?<!\p{L})(\d+)\s?(balení|bal\.|páry?|sada|set)(?!\p{L})/u', $txt, $m)) $pack = ['q' => 0, 'c' => '', 's' => $m[0]];
+        elseif ($unit) $pack = ['q' => 0, 'c' => '', 's' => ''];
+        $blocks[] = ['x' => $b['x'], 'top' => $b['top'], 'title' => $title, 'pack' => $pack, 'unit' => $unit];   // i bloky bez balení: brání přiřazení cizí ceny
+    }
+    $ok = function (array $b, array $p): bool {                       // sedí velká cena s cenou za jednotku?
+        if (!$b['unit'] || !$b['pack'] || !$b['pack']['q'] || $b['unit']['c'] !== $b['pack']['c']) return false;
+        $exp = $b['unit']['p'] * $b['pack']['q'] / $b['unit']['a'];
+        return abs($exp - $p['v']) <= max(0.06, $p['v'] * 0.006);
+    };
+    $usedP = []; $usedB = []; $res = []; $cand = [];
+    foreach ($blocks as $i => $b) foreach ($P as $j => $p) {
+        $dx = $b['x'] - $p['x']; $dy = $b['top'] - $p['y'];
+        if (abs($dx) <= 180 && $dy >= -60 && $dy <= 160 && $ok($b, $p)) $cand[] = [hypot($dx, $dy), $i, $j];
+    }
+    usort($cand, fn($a, $b) => $a[0] <=> $b[0]);
+    foreach ($cand as [, $i, $j]) { if (isset($usedB[$i]) || isset($usedP[$j])) continue; $usedB[$i] = $usedP[$j] = true; $res[] = [$i, $j]; }
+    $cost = function (array $b, array $p): float {
+        $dx = $b['x'] - $p['x']; $dy = $b['top'] - $p['y'];
+        if (abs($dx) <= 35 && $dy >= 15 && $dy <= 135) return abs($dx) + $dy * 0.5;                              // název nad cenou
+        if ($dx >= -175 && $dx <= -40 && $dy >= -25 && $dy <= 50) return 40 + abs($dx) * 0.3 + abs($dy - 15);   // název vlevo od ceny
+        return INF;
+    };
+    $best = function (array $list, array $skip, callable $f): int {
+        $bi = -1; $bc = INF;
+        foreach ($list as $k => $a) { if (isset($skip[$k])) continue; $c = $f($a); if ($c < $bc) { $bc = $c; $bi = $k; } }
+        return $bi;
+    };
+    do {
+        $again = false;
+        foreach ($blocks as $i => $b) {
+            if (isset($usedB[$i]) || $b['unit'] || !$b['pack']) continue;
+            $j = $best($P, $usedP, fn($p) => $cost($b, $p));
+            if ($j < 0 || $best($blocks, $usedB, fn($bb) => $cost($bb, $P[$j])) !== $i) continue;
+            $usedB[$i] = $usedP[$j] = true; $res[] = [$i, $j]; $again = true;
+        }
+    } while ($again);
+
+    $out = [];
+    foreach ($res as [$i, $j]) {
+        $b = $blocks[$i]; $p = $P[$j];
+        $note = null;                                                 // "cena bez penny karty" pod velkou cenou
+        foreach ($E as $e) if (preg_match('/bez ?penny/iu', $e['s']) && abs($e['x'] - $p['x']) < 25 && $e['y'] <= $p['y'] + 3 && $e['y'] >= $p['y'] - 14) { $note = $e; break; }
+        $badge = null; $bd = INF;                                     // kolečko se slevou "NN %"
+        foreach ($E as $e) {
+            if ($e['sz'] < 10 || !preg_match('/^\d{2}$/', $e['s'])) continue;
+            $dx = $e['x'] - $p['x']; $dy = $e['y'] - $p['y'];
+            if ($dx < -10 || $dx > 75 || $dy < 15 || $dy > 60) continue;
+            $pct = false;
+            foreach ($E as $f) if (strpos($f['s'], '%') !== false && abs($f['y'] - $e['y']) < 8 && $f['x'] > $e['x'] && $f['x'] - $e['x'] < 45) { $pct = true; break; }
+            if (!$pct) continue;
+            $d = hypot($dx - 20, $dy - 33);
+            if ($d < $bd) { $bd = $d; $badge = (int) $e['s']; }
+        }
+        $dg = null;                                                   // celé koruny původní ceny / ceny bez karty
+        foreach ($E as $e) {
+            if (!preg_match('/^\d{1,4}$/', $e['s'])) continue;
+            $hit = $note
+                ? $e['sz'] < 9 && abs($e['x'] - $note['x']) < 30 && $e['y'] < $note['y'] - 2 && $e['y'] > $note['y'] - 13
+                : $e['sz'] < 10 && $e['x'] >= $p['x'] - 6 && $e['x'] <= $p['x'] + 55 && $e['y'] <= $p['y'] + 1 && $e['y'] >= $p['y'] - 9;
+            if ($hit) { $dg = (int) $e['s']; break; }
+        }
+        $other = null;                                                // haléře se berou jen takové, které sedí se slevou v kolečku
+        if ($dg !== null && $badge !== null) {
+            foreach ([0.9, 0.5, 0.0] as $f) { $o = round($dg + $f, 2); if ($o > $p['v'] && (int) floor((1 - $p['v'] / $o) * 100 + 1e-9) === $badge) { $other = $o; break; } }
+            if ($other === null) foreach ([0.9, 0.5, 0.0] as $f) { $o = round($dg + $f, 2); if ($o > $p['v'] && abs((1 - $p['v'] / $o) * 100 - $badge) <= 1) { $other = $o; break; } }
+        }
+        if ($note && $other === null) continue;                       // cena jen s kartou bez ověřené ceny bez karty: vynechat
+        if (mb_strlen($b['title']) < 3 || $p['v'] < 1) continue;
+        $out[] = [
+            'title' => $b['title'], 'grams' => $b['pack']['s'] ?? '',
+            'price' => $note ? $other : $p['v'], 'cardPrice' => $note ? $p['v'] : null, 'oldPrice' => $note ? null : $other,
+            'discount' => $other !== null ? $badge : null, 'basePrice' => $b['unit']['s'] ?? null,
+        ];
+    }
+    return $out;
+}
+
+/** Platnost uvedená v záhlaví stránky ("od pátku 27. 11. do neděle 29. 11. 2026"); jen když je na stránce právě jedna. */
+function penny_page_validity(string $svg): ?array {
+    $text = html_entity_decode(strip_tags(str_replace('</svg:text>', "\n", $svg)), ENT_QUOTES | ENT_XML1, 'UTF-8');
+    if (!preg_match_all('/od\s+\p{L}+\s+(\d{1,2})\.\s*(\d{1,2})\.\s*do\s+\p{L}+\s+(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/iu', $text, $mm, PREG_SET_ORDER)) return null;
+    $set = [];
+    foreach ($mm as $m) {
+        $yFrom = (int) $m[2] > (int) $m[4] ? (int) $m[5] - 1 : (int) $m[5];
+        $r = [sprintf('%04d-%02d-%02d', $yFrom, $m[2], $m[1]), sprintf('%04d-%02d-%02d', $m[5], $m[4], $m[3])];
+        $set[implode('|', $r)] = $r;
+    }
+    return count($set) === 1 ? reset($set) : null;
+}
+
+/** Penny leták, záložní čtení (když se nepoznají velké ceny): z bloků "název / gramáž / cena za 100 g" cenu dopočítá.
+ *  Položky bez ověřitelné ceny se vynechají. */
 function parse_penny_svg(string $svg): array {
     $cells = [];   // [x, y, text]
     if (!preg_match_all('#<svg:text\s+transform="matrix\(([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) ([-\d.]+)\)[^"]*"[^>]*>(.*?)</svg:text>#s', $svg, $tm, PREG_SET_ORDER)) return [];
@@ -367,23 +541,36 @@ function fetch_penny(): array {
     foreach ($dirs as $path => [$d, $mo, $y]) {
         $from = "$y-$mo-$d";
         $to = ($from === $validFrom && $validTo) ? $validTo : date('Y-m-d', strtotime("$from +6 days"));
-        $miss = 0;
+        $miss = 0; $found = []; $backup = [];
         for ($p = 1; $p <= 60; $p++) {
             try { $svg = http_get('https://' . $path . '/files/assets/common/page-vectorlayers/' . sprintf('%04d', $p) . '.svg'); }
             catch (Throwable $e) { if (++$miss >= 3) break; continue; }   // stranka jen jako obrazek chybi; konec letaku = 3 chybejici po sobe
             $miss = 0;
-            foreach (parse_penny_svg($svg) as $o) {
-                $key = mb_strtolower(preg_replace('/\W+/u', '', $o['title'] . $o['grams']));
-                if (isset($seen[$key]) || isset($seen[mb_strtolower(preg_replace('/\W+/u', '', $o['title']))])) continue;
-                $seen[$key] = true;
-                $items[] = [
-                    'chain' => 'penny', 'id' => 'penny:l:' . md5($o['title'] . '|' . $o['grams'] . '|' . $from),
-                    'title' => $o['title'], 'subtitle' => $o['grams'], 'category' => null,
-                    'price' => $o['price'], 'oldPrice' => null, 'cardPrice' => null, 'discount' => null,
-                    'unit' => $o['grams'], 'basePrice' => $o['basePrice'],
-                    'validFrom' => $from, 'validTo' => $to, 'img' => null,
-                ];
+            [$pf, $pt] = penny_page_validity($svg) ?? [$from, $to];
+            foreach (parse_penny_page($svg) as $o) {
+                $o['from'] = $pf; $o['to'] = $pt;
+                $k = mb_strtolower(preg_replace('/\W+/u', '', $o['title'] . $o['grams'])) . '|' . $o['price'];
+                // stejna nabidka na vic stranach (titulka a vikendova strana): plati kratsi platnost
+                if (!isset($found[$k]) || strtotime($pt) - strtotime($pf) < strtotime($found[$k]['to']) - strtotime($found[$k]['from'])) $found[$k] = $o;
             }
+            foreach (parse_penny_svg($svg) as $o) $backup[] = $o + ['cardPrice' => null, 'oldPrice' => null, 'discount' => null, 'from' => $pf, 'to' => $pt];
+        }
+        if (count($found) < 100) {                                      // velke ceny se nepodarilo precist (jiny vzhled letaku)
+            foreach ($backup as $o) {
+                $k = mb_strtolower(preg_replace('/\W+/u', '', $o['title'] . $o['grams'])) . '|' . $o['price'];
+                if (!isset($found[$k])) $found[$k] = $o;
+            }
+        }
+        foreach ($found as $key => $o) {
+            if (isset($seen[$key]) || isset($seen[mb_strtolower(preg_replace('/\W+/u', '', $o['title']))])) continue;   // uz je z webu
+            $seen[$key] = true;
+            $items[] = [
+                'chain' => 'penny', 'id' => 'penny:l:' . md5($o['title'] . '|' . $o['grams'] . '|' . $o['price'] . '|' . $o['from']),
+                'title' => $o['title'], 'subtitle' => $o['grams'], 'category' => null,
+                'price' => $o['price'], 'oldPrice' => $o['oldPrice'], 'cardPrice' => $o['cardPrice'], 'discount' => $o['discount'],
+                'unit' => $o['grams'], 'basePrice' => $o['basePrice'],
+                'validFrom' => $o['from'], 'validTo' => $o['to'], 'img' => null,
+            ];
         }
     }
     return $items;
