@@ -284,6 +284,7 @@ function parse_penny_page(string $svg): array {
         usort($ls, fn($a, $b) => $b['y'] <=> $a['y'] ?: $a['x'] <=> $b['x']);
         $cur = null; $prev = null;
         foreach ($ls as $l) {
+            if (preg_match('/^CENA ZA/u', $l['s'])) continue;       // stitek u ceny, ne nazev zbozi
             $up = preg_match('/\p{Lu}{2}/u', $l['s']) && !preg_match('/\p{Ll}{2}/u', $l['s']);
             if ($prev !== null && $prev - $l['y'] > 12) $cur = null;
             if ($up && ($cur === null || $B[$cur]['rest'])) { $B[] = ['x' => $c['x'], 'top' => $l['y'], 'name' => [$l['s']], 'rest' => []]; $cur = count($B) - 1; }
@@ -299,7 +300,8 @@ function parse_penny_page(string $svg): array {
     $blocks = [];
     foreach ($B as $b) {
         $txt = preg_split('/v nabídce|běžně/iu', implode(' ', $b['rest']))[0];
-        $unit = null;
+        $unit = null; $perKg = null;
+        if (preg_match('/cena za 1\s?kg\s*(\d+)\s*Kč/iu', $txt, $km)) { $perKg = (int) $km[1]; $txt = str_replace($km[0], ' ', $txt); }
         if (preg_match($unitRe, $txt, $um)) {
             $txt = str_replace($um[0], ' ', $txt);
             $unit = ['a' => $base($num($um[1]), $um[2]), 'c' => $cls($um[2]), 'p' => $num($um[3]), 's' => "$um[1] $um[2] $um[3] Kč"];
@@ -309,29 +311,30 @@ function parse_penny_page(string $svg): array {
         if (preg_match($packRe, $txt, $m) || preg_match($packRe, implode(' ', $b['name']), $m)) {
             $n = $num($m[3] !== '' ? $m[3] : $m[2]);                  // "680/385 g": cena za jednotku se počítá z pevného podílu
             $pack = ['q' => $base($n, $m[4]) * ($m[1] !== '' ? (int) $m[1] : 1), 'c' => $cls($m[4]), 's' => trim($m[0])];
-        } elseif (preg_match('/cena za (1\s?kg|100\s?g|1\s?ks)/iu', $txt, $m)) $pack = ['q' => 0, 'c' => '', 's' => 'cena za ' . $m[1]];
+        } elseif (preg_match('/cena za (1\s?kg|100\s?g|1\s?ks)(?!\s*\d+(?:,\d+)?\s*Kč)/iu', $txt, $m)) $pack = ['q' => 0, 'c' => '', 's' => 'cena za ' . $m[1]];
         elseif (preg_match('/(?<!\p{L})(\d+)\s?(balení|bal\.|páry?|sada|set)(?!\p{L})/u', $txt, $m)) $pack = ['q' => 0, 'c' => '', 's' => $m[0]];
-        elseif ($unit) $pack = ['q' => 0, 'c' => '', 's' => ''];
-        $blocks[] = ['x' => $b['x'], 'top' => $b['top'], 'title' => $title, 'pack' => $pack, 'unit' => $unit];   // i bloky bez balení: brání přiřazení cizí ceny
+        elseif ($unit || $perKg) $pack = ['q' => 0, 'c' => '', 's' => ''];
+        $blocks[] = ['x' => $b['x'], 'top' => $b['top'], 'title' => $title, 'pack' => $pack, 'unit' => $unit, 'perKg' => $perKg];   // i bloky bez balení: brání přiřazení cizí ceny
     }
     $ok = function (array $b, array $p): bool {                       // sedí velká cena s cenou za jednotku?
         if (!$b['unit'] || !$b['pack'] || !$b['pack']['q'] || $b['unit']['c'] !== $b['pack']['c']) return false;
         $exp = $b['unit']['p'] * $b['pack']['q'] / $b['unit']['a'];
         return abs($exp - $p['v']) <= max(0.06, $p['v'] * 0.006);
     };
-    $usedP = []; $usedB = []; $res = []; $cand = [];
-    foreach ($blocks as $i => $b) foreach ($P as $j => $p) {
-        $dx = $b['x'] - $p['x']; $dy = $b['top'] - $p['y'];
-        if (abs($dx) <= 180 && $dy >= -60 && $dy <= 160 && $ok($b, $p)) $cand[] = [hypot($dx, $dy), $i, $j];
-    }
-    usort($cand, fn($a, $b) => $a[0] <=> $b[0]);
-    foreach ($cand as [, $i, $j]) { if (isset($usedB[$i]) || isset($usedP[$j])) continue; $usedB[$i] = $usedP[$j] = true; $res[] = [$i, $j]; }
     $cost = function (array $b, array $p): float {
         $dx = $b['x'] - $p['x']; $dy = $b['top'] - $p['y'];
         if (abs($dx) <= 35 && $dy >= 15 && $dy <= 135) return abs($dx) + $dy * 0.5;                              // název nad cenou
         if ($dx >= -175 && $dx <= -40 && $dy >= -25 && $dy <= 50) return 40 + abs($dx) * 0.3 + abs($dy - 15);   // název vlevo od ceny
+        if ($dx >= -130 && $dx <= -55 && $dy > 50 && $dy <= 135) return 90 + abs($dx + 85) * 0.3 + abs($dy - 95) * 0.3;   // název v levém horním rohu, cena vpravo dole
         return INF;
     };
+    $usedP = []; $usedB = []; $res = []; $cand = [];
+    foreach ($blocks as $i => $b) foreach ($P as $j => $p) {
+        $dx = $b['x'] - $p['x']; $dy = $b['top'] - $p['y'];
+        if (abs($dx) <= 180 && $dy >= -60 && $dy <= 160 && $ok($b, $p)) { $c = $cost($b, $p); $cand[] = [$c < INF ? $c : 100 + hypot($dx, $dy), $i, $j]; }   // stejna cena u vic dlazdic: rozhodne poloha
+    }
+    usort($cand, fn($a, $b) => $a[0] <=> $b[0]);
+    foreach ($cand as [, $i, $j]) { if (isset($usedB[$i]) || isset($usedP[$j])) continue; $usedB[$i] = $usedP[$j] = true; $res[] = [$i, $j]; }
     $best = function (array $list, array $skip, callable $f): int {
         $bi = -1; $bc = INF;
         foreach ($list as $k => $a) { if (isset($skip[$k])) continue; $c = $f($a); if ($c < $bc) { $bc = $c; $bi = $k; } }
@@ -347,9 +350,16 @@ function parse_penny_page(string $svg): array {
         }
     } while ($again);
 
+    $badges = [];                                                     // stitky "Platnost: 25.11.–1.12." nad casti stranky
+    foreach ($E as $e) {
+        if (!preg_match('/^(\d{1,2})\.\s?(\d{1,2})\.\s?[–-]\s?(\d{1,2})\.\s?(\d{1,2})\.$/u', $e['s'], $m)) continue;
+        foreach ($E as $f) if (stripos($f['s'], 'Platnost') === 0 && abs($f['y'] - $e['y']) < 3 && abs($f['x'] - $e['x']) < 80) { $badges[] = ['y' => $e['y'], 'd' => [(int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4]]]; break; }
+    }
     $out = [];
     foreach ($res as [$i, $j]) {
         $b = $blocks[$i]; $p = $P[$j];
+        $range = null; $ry = INF;                                      // nejblizsi stitek nad cenou
+        foreach ($badges as $g) if ($g['y'] > $p['y'] && $g['y'] < $ry) { $ry = $g['y']; $range = $g['d']; }
         $note = null;                                                 // "cena bez penny karty" pod velkou cenou
         foreach ($E as $e) if (preg_match('/bez ?penny/iu', $e['s']) && abs($e['x'] - $p['x']) < 25 && $e['y'] <= $p['y'] + 3 && $e['y'] >= $p['y'] - 14) { $note = $e; break; }
         $badge = null; $bd = INF;                                     // kolečko se slevou "NN %"
@@ -379,7 +389,8 @@ function parse_penny_page(string $svg): array {
         if ($note && $other === null) continue;                       // cena jen s kartou bez ověřené ceny bez karty: vynechat
         if (mb_strlen($b['title']) < 3 || $p['v'] < 1) continue;
         $out[] = [
-            'title' => $b['title'], 'grams' => $b['pack']['s'] ?? '',
+            'title' => $b['title'], 'range' => $range,
+            'grams' => $b['perKg'] && abs($p['v'] * 10 - $b['perKg']) <= 1 ? '100 g' : ($b['pack']['s'] ?? ''),
             'price' => $note ? $other : $p['v'], 'cardPrice' => $note ? $p['v'] : null, 'oldPrice' => $note ? null : $other,
             'discount' => $other !== null ? $badge : null, 'basePrice' => $b['unit']['s'] ?? null,
         ];
@@ -546,12 +557,18 @@ function fetch_penny(): array {
             try { $svg = http_get('https://' . $path . '/files/assets/common/page-vectorlayers/' . sprintf('%04d', $p) . '.svg'); }
             catch (Throwable $e) { if (++$miss >= 3) break; continue; }   // stranka jen jako obrazek chybi; konec letaku = 3 chybejici po sobe
             $miss = 0;
-            [$pf, $pt] = penny_page_validity($svg) ?? [$from, $to];
+            $header = penny_page_validity($svg);
+            [$pf, $pt] = $header ?? [$from, $to];
             foreach (parse_penny_page($svg) as $o) {
-                $o['from'] = $pf; $o['to'] = $pt;
+                [$o['from'], $o['to']] = [$pf, $pt];
+                if ($header && $o['range']) {                            // cast stranky ma vlastni platnost
+                    [$d1, $m1, $d2, $m2] = $o['range']; $yr = (int) substr($pf, 0, 4);
+                    $o['from'] = sprintf('%04d-%02d-%02d', $yr, $m1, $d1);
+                    $o['to'] = sprintf('%04d-%02d-%02d', $m2 < $m1 ? $yr + 1 : $yr, $m2, $d2);
+                }
                 $k = mb_strtolower(preg_replace('/\W+/u', '', $o['title'] . $o['grams'])) . '|' . $o['price'];
                 // stejna nabidka na vic stranach (titulka a vikendova strana): plati kratsi platnost
-                if (!isset($found[$k]) || strtotime($pt) - strtotime($pf) < strtotime($found[$k]['to']) - strtotime($found[$k]['from'])) $found[$k] = $o;
+                if (!isset($found[$k]) || strtotime($o['to']) - strtotime($o['from']) < strtotime($found[$k]['to']) - strtotime($found[$k]['from'])) $found[$k] = $o;
             }
             foreach (parse_penny_svg($svg) as $o) $backup[] = $o + ['cardPrice' => null, 'oldPrice' => null, 'discount' => null, 'from' => $pf, 'to' => $pt];
         }
