@@ -1,5 +1,5 @@
 {
- "version": "2026-11-26 17:59",
+ "version": "2026-11-28 10:26",
  "files": {
   "index.html": "f61cd4b4c9a6541976cf37e18e317fc00fd5c230f480e110efb0b1712276c17e",
   "sw.js": "ecf367bad74b433a5c0311f210b48f4224f2d593294a73035caffc1ff9b9b66a",
@@ -14,14 +14,14 @@
   "api/admin.php": "34a6c086ea06e2c0810cf107bc20b838257326ce0a6f24ac2fd29561492d3001",
   "api/contact.php": "cbac057d1a312fcad0487f5feff23d51c85b2ee3b48ad06bc063ce147c227f4b",
   "api/list.php": "25c7d4f1b6fd1a159abba78450bd3b53bf4eb568e2efcd97c0796354c0dd5a86",
-  "cron/auto.php": "1b87fc7e93a2337849a1a4056de5380a4afe8ec98f8a8a2cbfb9bf6cd30a782a",
+  "cron/auto.php": "2da13e552f0fe00b18680941fd8931086341b4b20944ee6a72e5287d804ac0ee",
   "cron/fetch_akce.php": "153038b797eb9f5fdfb3c435c175b192e23a7e856fe900d9e59f36a0b7bf7515",
   "cron/fetch_drug.php": "1b8707ea88228f048cbe429f1a932039821dd3803df87eb5964ef2eb4f411a0b",
   "cron/fetch_stores.php": "e832b807f046e9594a6e9555431ba2e5de1fd310a0de957633077d86afc95d6f",
   "api/watch.php": "0149971792e9b1bdc7a1aafb5ba4bbf93fac3cbeec5996707b4a0ad3fabc5e1b",
   "cron/digest.php": "b868fbdb0f80b5b8a687fc3f7a79cdb04859acd69e8d29578730b2ac5c5bdb35",
   "cron/probe_elektro.php": "895331d91f8ae4a30e77d20624ba1f5278b53ad13e4dd835a13844fe8109b2d0",
-  "cron/fetch_elektro.php": "0650221f50bf9609d074a9cd4d1a91fc1bd1478809991448520bfaa5398c70ce",
+  "cron/fetch_elektro.php": "af5ad5f0b32a40d03d2136a57556bd0fe52dc7b32ab25b818477428b7e6cdbb3",
   "api/img.php": "ab6bc10655dac4ebf073b81d09e15895f6bc7e0e8fb7822934300bae6a3b98b4"
  }
 }

@@ -82,48 +82,67 @@ function fetch_datart(): array {
     return $items;
 }
 
+/** Jedna stránka katalogu Planea: položky do $items (jen zlevněné), vrací počet dosud neviděných dlaždic. */
+function parse_planeo_page(string $h, string $from, string $to, array &$items, array &$seen): int {
+    $tiles = preg_split('~data-testid="catalogue\.item"(?=\s)~', $h);
+    array_shift($tiles);
+    $new = 0;
+    foreach ($tiles as $t) {
+        $t = substr($t, 0, 20000);
+        if (!preg_match('/data-gtm-product-id="(\d+)"/', $t, $mi)) continue;
+        $id = $mi[1];
+        if (isset($seen[$id])) continue;
+        $seen[$id] = true; $new++;
+        if (!preg_match("~data-gtm-product-name='(.*?)'\s~s", $t, $mn)) continue;
+        $title = trim(html_entity_decode($mn[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $brand = preg_match('/data-gtm-product-brand="([^"]*)"/', $t, $mb) ? html_entity_decode($mb[1], ENT_QUOTES | ENT_HTML5, 'UTF-8') : '';
+        $cur = preg_match('~data-testid="catalogue\.item\.price"\s+data-test-value="(\d+(?:\.\d+)?)"~', $t, $mp) ? (float) $mp[1] : null;
+        if (!$cur) continue;
+        $before = preg_match('~data-testid="catalogue\.item\.price-tag\.strip-price">([^<]*)<~', $t, $mb2) ? drug_num(drug_text($mb2[1])) : null;
+        $cpn = null; $code = '';
+        if (preg_match('~data-testid="catalogue\.item\.voucher".*?class="fd-mkt-box__text">([^<]*)<.*?class="fd-mkt-box__value">([^<]*)<~s', $t, $mv)) {
+            $code = drug_text($mv[1]); $cpn = drug_num(drug_text($mv[2]));
+        }
+        $coupon = $cpn && $cpn < $cur && $code !== '';
+        $price = $coupon ? $cpn : $cur;                                  // s kuponem, jinak zobrazená cena
+        $old = ($before && $before > $cur) ? $before : $cur;             // přeškrtnutá cena, jinak cena bez kuponu
+        if ($price >= $old) continue;
+        if (!preg_match('~<a\s+href="(/[^"]+)"~', $t, $mh)) continue;
+        $img = preg_match('~<img\s[^>]*?src="(https://mc-static\.fast\.eu/pics/[^"]+)"~', $t, $mim) ? html_entity_decode($mim[1], ENT_QUOTES) : null;
+        $cat = preg_match('/data-gtm-product-item-category2="([^"]*)"/', $t, $mcat) ? $mcat[1] : (preg_match('/data-gtm-product-item-category="([^"]*)"/', $t, $mcat) ? $mcat[1] : '');
+        $cat = trim(html_entity_decode($cat, ENT_QUOTES | ENT_HTML5, 'UTF-8'));   // druh zboží (Pračky, Myčky nádobí…) – v názvu není, ale hledá se podle něj
+        $items[] = [
+            'chain' => 'planeo', 'id' => 'planeo-' . $id,
+            'title' => trim(($brand && stripos($title, $brand) !== 0 ? $brand . ' ' : '') . $title),
+            'subtitle' => trim(($cat !== '' ? $cat . ' · ' : '') . ($coupon ? 'kupon ' . $code . ' v košíku nebo na prodejně' : ''), ' ·'),
+            'category' => null,
+            'price' => $price, 'oldPrice' => $old, 'cardPrice' => null,
+            'discount' => (int) round(($old - $price) / $old * 100),
+            'unit' => '', 'basePrice' => null, 'validFrom' => $from, 'validTo' => $to,
+            'img' => $img, 'url' => 'https://www.planeo.cz' . $mh[1],
+        ];
+    }
+    return $new;
+}
+
 function fetch_planeo(): array {
     $items = []; $seen = [];
-    foreach (PLANEO_PAGES as $base) {
-        [$from, $to] = [date('Y-m-d'), date('Y-m-d', strtotime('+3 days'))];
-        $maxp = min(80, ELEK_MAXP);
-        for ($pg = 0; $pg < $maxp; $pg++) {
-            $url = $base . ($pg > 0 ? '?offset=' . ($pg * 24) : '');
-            try { $h = http_get($url); } catch (Throwable $e) { if ($pg === 0 && count($items) === 0 && $base === PLANEO_PAGES[0]) throw $e; break; }
-            if ($pg === 0) [$from, $to] = elek_validity($h);
-            $tiles = explode('class="c-product c-product--catalogue"', $h);
-            array_shift($tiles);
-            $new = 0;
-            foreach ($tiles as $t) {
-                $t = substr($t, 0, 16000);
-                if (!preg_match('/data-gtm-product-id="(\d+)"/', $t, $mi)) continue;
-                $id = $mi[1];
-                if (isset($seen[$id])) continue;
-                $seen[$id] = true; $new++;
-                if (!preg_match("~data-gtm-product-name='(.*?)'\s~s", $t, $mn)) continue;
-                $title = trim(html_entity_decode($mn[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-                $brand = preg_match('/data-gtm-product-brand="([^"]*)"/', $t, $mb) ? html_entity_decode($mb[1], ENT_QUOTES | ENT_HTML5, 'UTF-8') : '';
-                $reg = preg_match('~data-testid="catalogue\.item\.price" data-test-value="(\d+)"~', $t, $mp) ? (float) $mp[1] : null;
-                $cpn = preg_match('~c-product__voucher-price">([^<]*)<~', $t, $mc) ? drug_num(drug_text($mc[1])) : null;
-                $code = preg_match('~c-product__voucher-code">([^<]*)<~', $t, $mk) ? drug_text($mk[1]) : '';
-                if (!$reg || !$cpn || $cpn >= $reg || $code === '') continue;
-                if (!preg_match('~<a href="(/[^"]+)">~', $t, $mh)) continue;
-                $img = preg_match('~<img src="(https://mc-static\.fast\.eu/pics/[^"]+)"~', $t, $mim) ? html_entity_decode($mim[1], ENT_QUOTES) : null;
-                $cat = preg_match('/data-gtm-product-item-category2="([^"]*)"/', $t, $mcat) ? $mcat[1] : (preg_match('/data-gtm-product-item-category="([^"]*)"/', $t, $mcat) ? $mcat[1] : '');
-                $cat = trim(html_entity_decode($cat, ENT_QUOTES | ENT_HTML5, 'UTF-8'));   // druh zboží (Pračky, Myčky nádobí…) – v názvu není, ale hledá se podle něj
-                $items[] = [
-                    'chain' => 'planeo', 'id' => 'planeo-' . $id,
-                    'title' => trim(($brand && stripos($title, $brand) !== 0 ? $brand . ' ' : '') . $title),
-                    'subtitle' => ($cat !== '' ? $cat . ' · ' : '') . 'kupon ' . $code . ' v košíku nebo na prodejně',
-                    'category' => null,
-                    'price' => $cpn, 'oldPrice' => $reg, 'cardPrice' => null,
-                    'discount' => (int) round(($reg - $cpn) / $reg * 100),
-                    'unit' => '', 'basePrice' => null, 'validFrom' => $from, 'validTo' => $to,
-                    'img' => $img, 'url' => 'https://www.planeo.cz' . $mh[1],
-                ];
+    foreach (PLANEO_PAGES as $n => $base) {
+        $maxp = min(200, ELEK_MAXP);
+        try { $first = http_get($base); } catch (Throwable $e) { if ($n === 0) throw $e; continue; }
+        [$from, $to] = elek_validity($first);
+        if (parse_planeo_page($first, $from, $to, $items, $seen) === 0) continue;
+        $failed = 0;
+        // dalsi stranky po 4 soubezne, jinak se vsechny (pres 120) nevejdou do casoveho limitu serveru
+        for ($pg = 1, $end = false; $pg < $maxp && !$end; $pg += 4) {
+            $urls = [];
+            for ($i = $pg; $i < min($pg + 4, $maxp); $i++) $urls[$i] = $base . '?offset=' . ($i * 24);
+            foreach (http_get_multi($urls) as $i => $h) {
+                if ($h === null) { try { $h = http_get($urls[$i]); } catch (Throwable $e) { $failed++; continue; } }
+                if (parse_planeo_page($h, $from, $to, $items, $seen) === 0) $end = true;
             }
-            if ($new === 0) break;
-            usleep(300000);
+            if ($failed >= 8) throw new RuntimeException("nenacetlo se $failed stranek");   // zustanou predchozi data
+            usleep(200000);
         }
     }
     return $items;

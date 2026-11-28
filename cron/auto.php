@@ -30,13 +30,16 @@ foreach ($chainsAkce as $c) if (($now - ($st['akce'][$c] ?? 0) > 20 * 3600 || !$
 $drugDue = null;   // akce drogerií (Rossmann, Teta) do data_drug.json
 foreach (['rossmann', 'teta'] as $c) if ($now - ($st['drug'][$c] ?? 0) > 20 * 3600 && $can("drug:$c")) { $drugDue = $c; break; }
 $elecDue = null;   // akce elektra (Datart, Planeo) do data_elektro.json
-foreach (['datart', 'planeo'] as $c) if ($now - ($st['elek'][$c] ?? 0) > 20 * 3600 && $can("elek:$c")) { $elecDue = $c; break; }
+$elecOk = function (string $c) use ($root): bool { $f = $root . '/data_elektro.json'; $d = is_file($f) ? json_decode((string) file_get_contents($f), true) : null; return ($d['sources'][$c]['ok'] ?? true) !== false; };
+foreach (['datart', 'planeo'] as $c) if (($now - ($st['elek'][$c] ?? 0) > 20 * 3600 || !$elecOk($c)) && $can("elek:$c")) { $elecDue = $c; break; }
 $chainsStores = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno', 'dm', 'rossmann', 'teta', 'datart', 'planeo'];
 $storeDue = null;
 foreach ($chainsStores as $c) if ($now - ($st['stores'][$c] ?? 0) > 7 * 86400 && $can("stores:$c")) { $storeDue = $c; break; }
 // rozpracovana Teta dostane kazdy druhy beh cely cas pro sebe, jinak ji delsi stahovani potravin necha jen par stranek
 $tetaTurn = is_file($root . '/teta_part.json') && empty($st['teta_last']) && $can('drug:teta');
-if ($tetaTurn) { $akceDue = null; $drugDue = 'teta'; }
+if ($tetaTurn) { $akceDue = null; $drugDue = 'teta'; if ($elecDue === 'planeo') $elecDue = null; }
+// Planeo (pres 120 stranek) dostane cely beh pro sebe
+if ($elecDue === 'planeo' && !$tetaTurn) { $akceDue = $drugDue = $storeDue = null; }
 if ((!$akceDue && !$storeDue && !$drugDue && !$elecDue) || $now - ($st['attempt'] ?? 0) < 1500) { echo "ok\n"; exit; }   // 25 min, aby pulhodinovy cron nepreskakoval behy kvuli vterinam navic
 
 $lock = fopen($root . '/auto.lock', 'c');
@@ -77,7 +80,8 @@ try {
         if ($elecDue === 'datart') { $c1 = (int) ($st['elek_c1'] ?? 1); if ($c1 < 1 || $c1 > 60) $c1 = 1; $_GET['c1'] = $c1; $_GET['c2'] = $c1 + $win - 1; }
         require_once __DIR__ . '/fetch_elektro.php';
         $begin("elek:$elecDue");
-        if (main_elektro($elecDue) === 0) {
+        // po chybe zustane zaznam o pokusu, dalsi zkouska za 6 h
+        if (main_elektro($elecDue) === 0 && $elecOk($elecDue)) {
             $done("elek:$elecDue");
             if ($elecDue !== 'datart') $st['elek'][$elecDue] = time();
             elseif ($c1 + $win > 30) { $st['elek'][$elecDue] = time(); $st['elek_c1'] = 1; }   // cyklus dokoncen
