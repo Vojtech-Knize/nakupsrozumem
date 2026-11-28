@@ -20,6 +20,9 @@ if (($st['penny_ver'] ?? 1) < 3) { unset($st['akce']['penny'], $st['try']['akce:
 // po prepsani stahovani Tety se zkusi hned
 if (($st['teta_ver'] ?? 1) < 2) { unset($st['drug']['teta'], $st['try']['drug:teta']); $st['teta_ver'] = 2; }
 
+// po oprave cteni Planea se zkusi hned
+if (($st['planeo_ver'] ?? 1) < 2) { unset($st['elek']['planeo'], $st['try']['elek:planeo']); $st['planeo_ver'] = 2; }
+
 // retezec, ktery se nedavno zkousel a nedobehl (napr. ho server ukoncil), se na 6 h preskoci, aby neblokoval ostatni
 $can = fn(string $k) => $now - ($st['try'][$k] ?? 0) > 6 * 3600;
 $chainsAkce = ['kaufland', 'penny', 'lidl', 'billa', 'globus', 'albert', 'norma', 'coop', 'terno'];
@@ -38,7 +41,7 @@ foreach ($chainsStores as $c) if ($now - ($st['stores'][$c] ?? 0) > 7 * 86400 &&
 // rozpracovana Teta dostane kazdy druhy beh cely cas pro sebe, jinak ji delsi stahovani potravin necha jen par stranek
 $tetaTurn = is_file($root . '/teta_part.json') && empty($st['teta_last']) && $can('drug:teta');
 if ($tetaTurn) { $akceDue = null; $drugDue = 'teta'; if ($elecDue === 'planeo') $elecDue = null; }
-// Planeo (pres 120 stranek) dostane cely beh pro sebe
+// Planeo (desitky velkych stranek) dostane cely beh pro sebe
 if ($elecDue === 'planeo' && !$tetaTurn) { $akceDue = $drugDue = $storeDue = null; }
 if ((!$akceDue && !$storeDue && !$drugDue && !$elecDue) || $now - ($st['attempt'] ?? 0) < 1500) { echo "ok\n"; exit; }   // 25 min, aby pulhodinovy cron nepreskakoval behy kvuli vterinam navic
 

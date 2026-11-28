@@ -127,23 +127,29 @@ function parse_planeo_page(string $h, string $from, string $to, array &$items, a
 
 function fetch_planeo(): array {
     $items = []; $seen = [];
+    $per = 72;   // nejvetsi nabizeny pocet na stranku, tretinovy pocet pozadavku
     foreach (PLANEO_PAGES as $n => $base) {
-        $maxp = min(200, ELEK_MAXP);
-        try { $first = http_get($base); } catch (Throwable $e) { if ($n === 0) throw $e; continue; }
+        $url = fn(int $pg): string => $base . '?limit=' . $per . ($pg > 0 ? '&offset=' . ($pg * $per) : '');
+        try { $first = http_get($url(0)); } catch (Throwable $e) { if ($n === 0) throw $e; continue; }
         [$from, $to] = elek_validity($first);
+        $before = count($seen);
         if (parse_planeo_page($first, $from, $to, $items, $seen) === 0) continue;
-        $failed = 0;
-        // dalsi stranky po 4 soubezne, jinak se vsechny (pres 120) nevejdou do casoveho limitu serveru
-        for ($pg = 1, $end = false; $pg < $maxp && !$end; $pg += 4) {
+        // pocet stran podle celkoveho poctu produktu: za posledni stranou web vraci 404
+        $total = preg_match('~data-gtm-page-products="(\d+)"~', $first, $m) ? (int) $m[1] : 0;
+        if (!$total) throw new RuntimeException('chybi celkovy pocet produktu');
+        $pages = min((int) ceil($total / $per), 100, ELEK_MAXP);
+        for ($pg = 1; $pg < $pages; $pg += 4) {
             $urls = [];
-            for ($i = $pg; $i < min($pg + 4, $maxp); $i++) $urls[$i] = $base . '?offset=' . ($i * 24);
+            for ($i = $pg; $i < min($pg + 4, $pages); $i++) $urls[$i] = $url($i);
             foreach (http_get_multi($urls) as $i => $h) {
-                if ($h === null) { try { $h = http_get($urls[$i]); } catch (Throwable $e) { $failed++; continue; } }
-                if (parse_planeo_page($h, $from, $to, $items, $seen) === 0) $end = true;
+                if ($h === null) { try { $h = http_get($urls[$i]); } catch (Throwable $e) { logmsg('[planeo] ' . $e->getMessage()); continue; } }
+                parse_planeo_page($h, $from, $to, $items, $seen);
             }
-            if ($failed >= 8) throw new RuntimeException("nenacetlo se $failed stranek");   // zustanou predchozi data
             usleep(200000);
         }
+        // neuplne stazeni neprepise predchozi data (rezerva na zmeny nabidky behem stahovani)
+        $got = count($seen) - $before;
+        if (ELEK_MAXP >= 9999 && $got < 0.9 * min($total, $pages * $per)) throw new RuntimeException("nacteno jen $got z $total produktu");
     }
     return $items;
 }
